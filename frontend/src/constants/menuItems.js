@@ -8,7 +8,7 @@ export const MENU_ITEMS = [
   {
     label: 'Dashboard',
     path: '/dashboard',
-    icon: 'home',
+    icon: 'chart-bar',
     section: 'MAIN',
   },
 
@@ -16,13 +16,13 @@ export const MENU_ITEMS = [
   {
     label: 'Billing',
     path: '/billing',
-    icon: 'receipt',
+    icon: 'receipt-percent',
     section: 'MANAGE',
   },
   {
     label: 'Inventory',
     path: '/inventory',
-    icon: 'cube',
+    icon: 'archive-box',
     section: 'MANAGE',
   },
   {
@@ -54,13 +54,13 @@ export const MENU_ITEMS = [
   {
     label: 'Sales History',
     path: '/sales',
-    icon: 'chart-bar',
+    icon: 'chart-line',
     section: 'REPORTS',
   },
   {
     label: 'Finance',
     path: '/finance',
-    icon: 'currency-rupee',
+    icon: 'banknotes',
     section: 'REPORTS',
   },
   {
@@ -72,7 +72,7 @@ export const MENU_ITEMS = [
   {
     label: 'Damage & Loss',
     path: '/damage-loss',
-    icon: 'trash',
+    icon: 'exclamation-triangle',
     section: 'REPORTS',
   },
 
@@ -80,7 +80,7 @@ export const MENU_ITEMS = [
   {
     label: 'Settings',
     path: '/settings',
-    icon: 'cog',
+    icon: 'cog-6-tooth',
     section: 'SETTINGS',
   },
 ]

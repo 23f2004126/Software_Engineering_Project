@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { getIcon } from '../../utils/iconMap.js'
 
 const router = useRouter()
 
@@ -10,6 +11,7 @@ const props = defineProps({
     default: 'info',
     validator: (v) => ['warning', 'success', 'danger', 'info'].includes(v),
   },
+  icon: String,
   title: String,
   message: String,
   linkLabel: String,
@@ -66,7 +68,13 @@ const handleCardClick = () => {
         class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
         :class="`${iconClasses.bg}`"
       >
-        <svg class="w-5 h-5" :class="`${iconClasses.text}`" fill="currentColor" viewBox="0 0 20 20">
+        <component
+          v-if="icon && getIcon(icon)"
+          :is="getIcon(icon)"
+          class="w-5 h-5"
+          :class="`${iconClasses.text}`"
+        />
+        <svg v-else class="w-5 h-5" :class="`${iconClasses.text}`" fill="currentColor" viewBox="0 0 20 20">
           <circle cx="10" cy="10" r="8" />
         </svg>
       </div>

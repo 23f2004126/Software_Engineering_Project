@@ -1,6 +1,7 @@
 <script setup>
 import { useRouter, useRoute } from 'vue-router'
 import { MENU_ITEMS } from '../../constants/menuItems.js'
+import { getIcon } from '../../utils/iconMap.js'
 import { computed } from 'vue'
 
 const router = useRouter()
@@ -66,10 +67,12 @@ const logout = () => {
             <!-- Active indicator bar -->
             <div v-if="isActive(item.path)" class="absolute left-0 top-1 bottom-1 w-1 bg-emerald-500 rounded-r-full"></div>
 
-            <!-- Icon -->
-            <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-              <circle cx="10" cy="10" r="8" />
-            </svg>
+            <!-- Icon from Lucide -->
+            <component
+              :is="getIcon(item.icon)"
+              class="w-4 h-4 flex-shrink-0"
+              :stroke-width="2"
+            />
 
             <!-- Label -->
             <span class="truncate">{{ item.label }}</span>

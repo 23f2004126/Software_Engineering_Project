@@ -7,19 +7,21 @@ import SalesTrendChart from '../../components/charts/SalesTrendChart.vue'
 import RevenueExpenseChart from '../../components/charts/RevenueExpenseChart.vue'
 import AIInsightCard from '../../components/ai/AIInsightCard.vue'
 import { formatCurrency } from '../../utils/currency.js'
+import { getIcon } from '../../utils/iconMap.js'
 
 const kpiCards = ref([
   { label: "Today's Sales", value: 18450, displayValue: 0, change: 12.4, icon: 'shopping-cart', color: 'emerald' },
-  { label: "Today's Net Profit", value: 4210, displayValue: 0, change: 8.1, icon: 'trending-up', color: 'teal' },
-  { label: 'Monthly Revenue', value: 324800, displayValue: 0, change: 5.3, icon: 'chart-bar', color: 'blue' },
-  { label: 'Outstanding Credit', value: 12300, displayValue: 0, change: -2.1, icon: 'credit-card', color: 'amber' },
-  { label: 'Low Stock Items', value: 7, displayValue: 0, change: null, icon: 'cube', color: 'red' },
-  { label: 'Expiring Soon', value: 3, displayValue: 0, change: null, icon: 'clock', color: 'amber' },
+  { label: "Today's Net Profit", value: 4210, displayValue: 0, change: 8.1, icon: 'arrow-trending-up', color: 'teal' },
+  { label: 'Monthly Revenue', value: 324800, displayValue: 0, change: 5.3, icon: 'currency-rupee', color: 'blue' },
+  { label: 'Outstanding Credit', value: 12300, displayValue: 0, change: -2.1, icon: 'document-text', color: 'amber' },
+  { label: 'Low Stock Items', value: 7, displayValue: 0, change: null, icon: 'cube-transparent', color: 'red' },
+  { label: 'Expiring Soon', value: 3, displayValue: 0, change: null, icon: 'hourglass', color: 'amber' },
 ])
 
 const aiInsights = [
   {
     type: 'warning',
+    icon: 'arrow-trending-up',
     title: 'Demand Rising',
     message: 'Tata Salt 1kg sales up 34% this week. Consider restocking.',
     linkLabel: 'View Inventory',
@@ -27,6 +29,7 @@ const aiInsights = [
   },
   {
     type: 'danger',
+    icon: 'exclamation-circle',
     title: 'Stock Critical',
     message: 'Aashirvaad Atta 5kg has only 2 units left. Reorder now.',
     linkLabel: 'Reorder Now',
@@ -34,6 +37,7 @@ const aiInsights = [
   },
   {
     type: 'success',
+    icon: 'sparkles',
     title: 'Profit Boost',
     message: 'Net profit up ₹840 today vs yesterday. Margin improved 2%.',
     linkLabel: 'View Finance',
@@ -41,6 +45,7 @@ const aiInsights = [
   },
   {
     type: 'warning',
+    icon: 'clock-alert',
     title: 'Expiry Alert',
     message: '3 items expire within 7 days. Check inventory to avoid losses.',
     linkLabel: 'View Items',
@@ -57,10 +62,10 @@ const recentTransactions = [
 ]
 
 const notifications = [
-  { id: 1, icon: 'box', title: 'Low Stock', message: 'Amul Butter 100g — only 2 units left', type: 'stock' },
-  { id: 2, icon: 'alert', title: 'Credit Alert', message: 'Ramesh Patil — ₹3,200 overdue', type: 'credit' },
-  { id: 3, icon: 'clock', title: 'Expiry Soon', message: 'Amul Curd 400g expires in 2 days', type: 'expiry' },
-  { id: 4, icon: 'check', title: 'Shift Ended', message: 'Ravi Kumar — 6h 45m', type: 'shift' },
+  { id: 1, icon: 'cube-transparent', title: 'Low Stock', message: 'Amul Butter 100g — only 2 units left', type: 'stock' },
+  { id: 2, icon: 'document-text', title: 'Credit Alert', message: 'Ramesh Patil — ₹3,200 overdue', type: 'credit' },
+  { id: 3, icon: 'hourglass', title: 'Expiry Soon', message: 'Amul Curd 400g expires in 2 days', type: 'expiry' },
+  { id: 4, icon: 'check-circle', title: 'Shift Ended', message: 'Ravi Kumar — 6h 45m', type: 'shift' },
 ]
 
 const dismissedInsights = ref(new Set())
@@ -148,9 +153,11 @@ const notificationColors = {
               class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
               :class="`${colorClasses[card.color].bg}`"
             >
-              <svg class="w-5 h-5" :class="`${colorClasses[card.color].text}`" fill="currentColor" viewBox="0 0 20 20">
-                <circle cx="10" cy="10" r="8" />
-              </svg>
+              <component
+                :is="getIcon(card.icon)"
+                class="w-5 h-5"
+                :class="`${colorClasses[card.color].text}`"
+              />
             </div>
           </div>
         </Card>
@@ -248,9 +255,11 @@ const notificationColors = {
                   class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
                   :class="`${notificationColors[notif.type].bg}`"
                 >
-                  <svg class="w-4 h-4" :class="`${notificationColors[notif.type].text}`" fill="currentColor" viewBox="0 0 20 20">
-                    <circle cx="10" cy="10" r="8" />
-                  </svg>
+                  <component
+                    :is="getIcon(notif.icon)"
+                    class="w-4 h-4"
+                    :class="`${notificationColors[notif.type].text}`"
+                  />
                 </div>
                 <div class="flex-1 min-w-0">
                   <p class="text-sm font-medium text-slate-900">{{ notif.title }}</p>
