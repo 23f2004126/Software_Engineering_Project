@@ -1,7 +1,10 @@
+// Sonik — Smart Retail Management System
+// Vue 3 + Vue Router + TailwindCSS
+// All pages use dummy/mock data. Backend integration pending.
+
 import { createApp } from 'vue'
-import './style.css'
 import App from './App.vue'
-
-createApp(App).mount('#app')
-
+import router from './router/index.js'
 import './assets/styles/tailwind.css'
+
+createApp(App).use(router).mount('#app')
