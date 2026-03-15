@@ -84,7 +84,7 @@ const handleSort = (column) => {
           :class="{
             'hover:bg-slate-50': hoverable,
             'bg-slate-50/50': striped && rowIndex % 2 === 1,
-            'cursor-pointer': $listeners['row-click'],
+            'cursor-pointer': true,
           }"
           @click="handleRowClick(row)"
         >

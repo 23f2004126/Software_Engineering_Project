@@ -42,7 +42,7 @@ const alertSettings = ref({
 
 // User Management
 const mockUsers = [
-  { id: 1, name: 'Rajesh Patel', email: 'rajesh@sonik.com', role: 'Owner', status: 'active', lastLogin: '2025-06-05 14:30' },
+  { id: 1, name: 'Rajesh Patel', email: 'owner@sonik.com', role: 'Owner', status: 'active', lastLogin: '2025-06-05 14:30' },
   { id: 2, name: 'Priya Singh', email: 'priya@sonik.com', role: 'Manager', status: 'active', lastLogin: '2025-06-05 10:15' },
   { id: 3, name: 'Amit Kumar', email: 'amit@sonik.com', role: 'Staff', status: 'inactive', lastLogin: '2025-06-03 16:45' },
 ]

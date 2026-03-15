@@ -4,7 +4,8 @@ import MainLayout from '../../layouts/MainLayout.vue'
 import Card from '../../components/ui/Card.vue'
 import Button from '../../components/ui/Button.vue'
 import Table from '../../components/ui/Table.vue'
-import { formatCurrency, formatDate } from '../../utils/currency.js'
+import { formatCurrency } from '../../utils/currency.js'
+import { formatDate } from '../../utils/dateFormatter.js'
 
 const mockShifts = [
   { id: 1, employee: 'Ravi Kumar', date: '2025-06-05', startTime: '08:00', endTime: '16:00', duration: '8h', sales: 4200, transactions: 12, anomaly: null, performance: 92 },

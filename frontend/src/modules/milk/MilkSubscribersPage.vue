@@ -5,7 +5,7 @@ import Card from '../../components/ui/Card.vue'
 import Button from '../../components/ui/Button.vue'
 import Input from '../../components/ui/Input.vue'
 import Modal from '../../components/ui/Modal.vue'
-import { formatCurrency, formatDate } from '../../utils/currency.js'
+import { formatCurrency } from '../../utils/currency.js'
 
 const mockSubscribers = [
   { id: 1, name: 'Rajesh Patel', phone: '9876543210', quantity: 500, frequency: 'daily', startDate: '2025-01-15', status: 'active', amount: 500 },
