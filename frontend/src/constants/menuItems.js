@@ -75,12 +75,4 @@ export const MENU_ITEMS = [
     icon: 'exclamation-triangle',
     section: 'REPORTS',
   },
-
-  // SETTINGS section
-  {
-    label: 'Settings',
-    path: '/settings',
-    icon: 'cog-6-tooth',
-    section: 'SETTINGS',
-  },
 ]

@@ -23,5 +23,4 @@ export const ROUTES = {
   PURCHASE_ORDERS: '/purchase-orders',
   EMPLOYEES: '/employees',
   SHIFT_REPORT: '/shift-report',
-  SETTINGS: '/settings',
 }

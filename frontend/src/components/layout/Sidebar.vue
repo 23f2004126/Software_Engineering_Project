@@ -19,7 +19,7 @@ const groupedMenuItems = computed(() => {
   return groups
 })
 
-const sections = ['MAIN', 'MANAGE', 'REPORTS', 'SETTINGS']
+const sections = ['MAIN', 'MANAGE', 'REPORTS']
 
 const isActive = (path) => {
   if (path === '/dashboard') {
