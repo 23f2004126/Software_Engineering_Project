@@ -11,8 +11,29 @@ const rememberMe = ref(false)
 const isLoading = ref(false)
 const errorMsg = ref('')
 
-const handleSubmit = () => {
-  errorMsg.value = ''
+// const handleSubmit = () => {
+//   errorMsg.value = ''
+
+//   if (!email.value.includes('@')) {
+//     errorMsg.value = 'Please enter a valid email address'
+//     return
+//   }
+
+//   if (password.value.length < 6) {
+//     errorMsg.value = 'Password must be at least 6 characters'
+//     return
+//   }
+
+//   isLoading.value = true
+
+//   setTimeout(() => {
+//     localStorage.setItem('sonik_auth', 'true')
+//     isLoading.value = false
+//     router.push('/dashboard')
+//   }, 1500)
+// }
+const handleSubmit = async () => {
+  errorMsg.value = ""
 
   if (!email.value.includes('@')) {
     errorMsg.value = 'Please enter a valid email address'
@@ -26,13 +47,42 @@ const handleSubmit = () => {
 
   isLoading.value = true
 
-  setTimeout(() => {
-    localStorage.setItem('sonik_auth', 'true')
-    isLoading.value = false
-    router.push('/dashboard')
-  }, 1500)
-}
+  try {
+    const response = await fetch("http://127.0.0.1:8000/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        email: email.value,
+        password: password.value
+      })
+    })
 
+    const data = await response.json()
+
+    if (!response.ok) {
+      errorMsg.value = data.detail || "Login failed"
+      isLoading.value = false
+      return
+    }
+
+    // ✅ Store user
+    localStorage.setItem("user", JSON.stringify(data.user))
+
+    // ✅ Optional: store login flag
+    localStorage.setItem("sonik_auth", "true")
+
+    // ✅ Redirect
+    router.push('/dashboard')
+
+  } catch (error) {
+    console.error(error)
+    errorMsg.value = "Server error, try again"
+  } finally {
+    isLoading.value = false
+  }
+}
 const features = [
   { 
     icon: BarChart3, 
