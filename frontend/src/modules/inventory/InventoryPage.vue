@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '../../stores/authStore'
 import MainLayout from '../../layouts/MainLayout.vue'
 import Card from '../../components/ui/Card.vue'
 import Button from '../../components/ui/Button.vue'
@@ -10,6 +11,7 @@ import { formatCurrency, calcMargin, marginColor } from '../../utils/currency.js
 import { formatDate, isExpiringSoon, isExpired } from '../../utils/dateFormatter.js'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 const mockProducts = [
   { id: 1, name: 'Amul Butter 100g', category: 'Dairy', cost: 48, price: 58, stock: 14, reorder: 20, expiry: '2025-06-30', aiTag: 'Low Stock' },
@@ -92,7 +94,7 @@ const getStatusLabel = (product) => {
           <h1 class="text-2xl font-bold text-slate-900">Inventory</h1>
           <p class="text-sm text-slate-500 mt-1">{{ mockProducts.length }} products in stock</p>
         </div>
-        <Button variant="primary" @click="router.push('/inventory/add')">
+        <Button v-if="authStore.isOwner" variant="primary" @click="router.push('/inventory/add')">
           + Add Product
         </Button>
       </div>
@@ -206,7 +208,12 @@ const getStatusLabel = (product) => {
 
       <!-- Grid View -->
       <div v-if="viewMode === 'grid'" class="grid grid-cols-4 gap-5">
-        <Card v-for="product in paginatedProducts" :key="product.id" hover class="cursor-pointer">
+        <Card
+          v-for="product in paginatedProducts"
+          :key="product.id"
+          :class="authStore.isOwner && 'cursor-pointer hover:shadow-lg transition-shadow'"
+          @click="authStore.isOwner && router.push(`/inventory/edit/${product.id}`)"
+        >
           <div class="text-center mb-3">
             <div class="w-full aspect-video rounded-xl mb-3 flex items-center justify-center text-3xl bg-slate-100">
               📦

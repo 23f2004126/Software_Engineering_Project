@@ -11,6 +11,12 @@ export const MENU_ITEMS = [
     icon: 'chart-bar',
     section: 'MAIN',
   },
+  {
+    label: 'Notifications',
+    path: '/notifications',
+    icon: 'bell',
+    section: 'MAIN',
+  },
 
   // MANAGE section
   {
@@ -29,6 +35,12 @@ export const MENU_ITEMS = [
     label: 'Credit',
     path: '/credit',
     icon: 'credit-card',
+    section: 'MANAGE',
+  },
+  {
+    label: 'Customers',
+    path: '/customers',
+    icon: 'users',
     section: 'MANAGE',
   },
   {
@@ -58,15 +70,15 @@ export const MENU_ITEMS = [
     section: 'REPORTS',
   },
   {
-    label: 'Finance',
-    path: '/finance',
-    icon: 'banknotes',
+    label: 'Reports',
+    path: '/reports',
+    icon: 'document-chart-bar',
     section: 'REPORTS',
   },
   {
-    label: 'Shift Reports',
-    path: '/shift-report',
-    icon: 'clock',
+    label: 'Finance',
+    path: '/finance',
+    icon: 'banknotes',
     section: 'REPORTS',
   },
   {
@@ -74,5 +86,13 @@ export const MENU_ITEMS = [
     path: '/damage-loss',
     icon: 'exclamation-triangle',
     section: 'REPORTS',
+  },
+
+  // SHIFT section (for employees)
+  {
+    label: 'Shift Report',
+    path: '/shift-report',
+    icon: 'clock',
+    section: 'SHIFT',
   },
 ]

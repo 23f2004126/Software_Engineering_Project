@@ -1,9 +1,12 @@
 <script setup>
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ref, computed } from 'vue'
+import { useAuthStore } from '@/stores/authStore'
 import NotificationBell from './NotificationBell.vue'
 
 const route = useRoute()
+const router = useRouter()
+const authStore = useAuthStore()
 const searchQuery = ref('')
 const showUserMenu = ref(false)
 
@@ -19,6 +22,7 @@ const titleMap = {
   Finance: 'Finance',
   CreditManagement: 'Credit Management',
   CustomerProfile: 'Customer Profile',
+  CustomerList: 'Customers',
   MilkSubscribers: 'Milk Subscribers',
   MilkDailyEntry: 'Milk Daily Entry',
   Suppliers: 'Suppliers',
@@ -26,10 +30,22 @@ const titleMap = {
   Employees: 'Employees',
   ShiftReport: 'Shift Report',
   Settings: 'Settings',
+  Notifications: 'Notifications',
+  Reports: 'Reports',
 }
 
 const pageTitle = computed(() => {
   return titleMap[route.name] || 'Page'
+})
+
+const userInitials = computed(() => {
+  if (!authStore.user?.name) return 'U'
+  return authStore.user.name
+    .split(' ')
+    .map(part => part[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
 })
 
 const breadcrumb = computed(() => {
@@ -45,6 +61,7 @@ const breadcrumb = computed(() => {
     Finance: 'Reports',
     CreditManagement: 'Manage',
     CustomerProfile: 'Manage',
+    CustomerList: 'Manage',
     MilkSubscribers: 'Manage',
     MilkDailyEntry: 'Manage',
     Suppliers: 'Manage',
@@ -52,6 +69,8 @@ const breadcrumb = computed(() => {
     Employees: 'Manage',
     ShiftReport: 'Reports',
     Settings: 'Settings',
+    Notifications: 'Dashboard',
+    Reports: 'Reports',
   }
   return sections[route.name] || 'Page'
 })
@@ -80,8 +99,8 @@ const breadcrumb = computed(() => {
         />
       </div>
 
-      <!-- Notification bell -->
-      <NotificationBell />
+      <!-- Notification bell (Owner only) -->
+      <NotificationBell v-if="authStore.isOwner" />
 
       <!-- User avatar -->
       <div class="relative">
@@ -89,7 +108,7 @@ const breadcrumb = computed(() => {
           class="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white text-xs font-semibold hover:shadow-lg transition-shadow"
           @click="showUserMenu = !showUserMenu"
         >
-          RK
+          {{ userInitials }}
         </button>
         <Transition name="fade">
           <div
@@ -99,16 +118,11 @@ const breadcrumb = computed(() => {
             <button class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
               My Profile
             </button>
-            <button class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 border-t border-slate-100 transition-colors">
-              Settings
-            </button>
             <button class="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 border-t border-slate-100 transition-colors"
-              @click="
-                () => {
-                  localStorage.removeItem('sonik_auth')
-                  $router.push('/login')
-                }
-              ">
+              @click="() => {
+                authStore.logout()
+                router.push('/login')
+              }">
               Logout
             </button>
           </div>

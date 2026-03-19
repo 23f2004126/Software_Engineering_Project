@@ -81,14 +81,9 @@ const mockTransactions = {
   <MainLayout>
     <div class="space-y-6">
       <!-- Header -->
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-bold text-slate-900">Credit Management</h1>
-          <p class="text-sm text-slate-500 mt-1">Track customer credit limits and outstanding payments</p>
-        </div>
-        <Button variant="primary" @click="showAddModal = true">
-          + Add Customer
-        </Button>
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900">Credit Management</h1>
+        <p class="text-sm text-slate-500 mt-1">Track customer credit limits and outstanding payments</p>
       </div>
 
       <!-- Stats -->

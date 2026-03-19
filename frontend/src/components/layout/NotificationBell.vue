@@ -1,6 +1,8 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 
+const router = useRouter()
 const isOpen = ref(false)
 
 const notifications = ref([
@@ -148,7 +150,10 @@ onUnmounted(() => {
         </div>
 
         <!-- Footer -->
-        <div class="px-4 py-3 border-t border-slate-100 text-center hover:bg-slate-50 cursor-pointer transition-colors flex-shrink-0">
+        <div 
+          @click="router.push('/notifications')"
+          class="px-4 py-3 border-t border-slate-100 text-center hover:bg-slate-50 cursor-pointer transition-colors flex-shrink-0"
+        >
           <p class="text-sm text-emerald-600 font-medium">View all notifications →</p>
         </div>
       </div>

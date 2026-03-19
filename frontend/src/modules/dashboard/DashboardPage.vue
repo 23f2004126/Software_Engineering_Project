@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useAuthStore } from '../../stores/authStore.js'
 import MainLayout from '../../layouts/MainLayout.vue'
 import Card from '../../components/ui/Card.vue'
 import Button from '../../components/ui/Button.vue'
@@ -9,6 +10,8 @@ import AIInsightCard from '../../components/ai/AIInsightCard.vue'
 import { formatCurrency } from '../../utils/currency.js'
 import { getIcon } from '../../utils/iconMap.js'
 
+const authStore = useAuthStore()
+
 const kpiCards = ref([
   { label: "Today's Sales", value: 18450, displayValue: 0, change: 12.4, icon: 'shopping-cart', color: 'emerald' },
   { label: "Today's Net Profit", value: 4210, displayValue: 0, change: 8.1, icon: 'arrow-trending-up', color: 'teal' },
@@ -17,6 +20,13 @@ const kpiCards = ref([
   { label: 'Low Stock Items', value: 7, displayValue: 0, change: null, icon: 'cube-transparent', color: 'red' },
   { label: 'Expiring Soon', value: 3, displayValue: 0, change: null, icon: 'hourglass', color: 'amber' },
 ])
+
+// Employee view cards (only Today's Sales and Low Stock)
+const employeeKpiCards = computed(() => {
+  return kpiCards.value.filter(card => 
+    card.label === "Today's Sales" || card.label === 'Low Stock Items'
+  )
+})
 
 const aiInsights = [
   {
@@ -120,7 +130,7 @@ const notificationColors = {
       </div>
 
       <!-- KPI Cards -->
-      <div class="grid grid-cols-3 gap-5">
+      <div v-if="authStore.isOwner" class="grid grid-cols-3 gap-5">
         <Card
           v-for="(card, index) in kpiCards"
           :key="index"
@@ -163,8 +173,43 @@ const notificationColors = {
         </Card>
       </div>
 
-      <!-- Charts row -->
-      <div class="grid grid-cols-5 gap-5">
+      <!-- Employee KPI Cards (simplified) -->
+      <div v-if="authStore.isEmployee" class="grid grid-cols-2 gap-5">
+        <Card hover v-for="(card, index) in employeeKpiCards" :key="index">
+          <div class="flex items-start justify-between">
+            <div class="flex-1">
+              <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{{ card.label }}</p>
+              <p class="font-mono text-3xl font-bold text-slate-900 mt-2">{{ card.displayValue }}</p>
+              <div v-if="card.change !== null" class="flex items-center gap-1 mt-2 text-xs">
+                <svg
+                  v-if="card.change > 0"
+                  class="w-3 h-3 text-emerald-600"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path fill-rule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414-1.414L13.586 7H12z" clip-rule="evenodd" />
+                </svg>
+                <span :class="card.change > 0 ? 'text-emerald-600' : 'text-red-600'">
+                  {{ Math.abs(card.change) }}%
+                </span>
+              </div>
+            </div>
+            <div
+              class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+              :class="`${colorClasses[card.color].bg}`"
+            >
+              <component
+                :is="getIcon(card.icon)"
+                class="w-5 h-5"
+                :class="`${colorClasses[card.color].text}`"
+              />
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <!-- Charts row (owner only) -->
+      <div v-if="authStore.isOwner" class="grid grid-cols-5 gap-5">
         <div class="col-span-3">
           <Card>
             <SalesTrendChart :showToggle="true" />
@@ -177,8 +222,8 @@ const notificationColors = {
         </div>
       </div>
 
-      <!-- AI Insights -->
-      <Card>
+      <!-- AI Insights (owner only) -->
+      <Card v-if="authStore.isOwner">
         <template #header>
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">

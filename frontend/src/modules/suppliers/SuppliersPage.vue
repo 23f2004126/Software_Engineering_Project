@@ -8,14 +8,14 @@ import Modal from '../../components/ui/Modal.vue'
 import { formatCurrency } from '../../utils/currency.js'
 import { formatDate } from '../../utils/dateFormatter.js'
 
-const mockSuppliers = [
+const mockSuppliers = ref([
   { id: 1, name: 'Fresh Farms Dairy', contact: 'Rajesh Kumar', phone: '9876543210', email: 'fresh@farm.com', city: 'Pune', rating: 4.8, pending: 45000, nextDelivery: '2025-06-08' },
   { id: 2, name: 'Pure Milk Co', contact: 'Priya Sharma', phone: '9876543211', email: 'pure@milk.com', city: 'Mumbai', rating: 4.5, pending: 32000, nextDelivery: '2025-06-10' },
   { id: 3, name: 'Organic Suppliers', contact: 'Vikram Singh', phone: '9876543212', email: 'organic@supply.com', city: 'Delhi', rating: 4.2, pending: 68000, nextDelivery: '2025-06-15' },
   { id: 4, name: 'Dairy Direct', contact: 'Neha Patel', phone: '9876543213', email: 'direct@dairy.com', city: 'Bangalore', rating: 4.6, pending: 21000, nextDelivery: '2025-06-07' },
   { id: 5, name: 'Premium Milk Hub', contact: 'Amit Verma', phone: '9876543214', email: 'premium@hub.com', city: 'Ahmedabad', rating: 4.3, pending: 38500, nextDelivery: '2025-06-12' },
   { id: 6, name: 'Valley Dairy Farm', contact: 'Ananya Das', phone: '9876543215', email: 'valley@farm.com', city: 'Jaipur', rating: 4.7, pending: 55000, nextDelivery: '2025-06-09' },
-]
+])
 
 const showAddModal = ref(false)
 const showPaymentPanel = ref(true)
@@ -30,6 +30,13 @@ const newSupplier = ref({
 })
 
 const handleAddSupplier = () => {
+  mockSuppliers.value.push({
+    id: mockSuppliers.value.length + 1,
+    ...newSupplier.value,
+    rating: 4.5,
+    pending: 0,
+    nextDelivery: new Date().toISOString().split('T')[0],
+  })
   showAddModal.value = false
   newSupplier.value = {
     name: '',

@@ -1,21 +1,34 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '../../stores/authStore.js'
 import { BarChart3, Package, ShieldCheck } from 'lucide-vue-next'
 
 const router = useRouter()
-const authStore = useAuthStore()
 
+const name = ref('')
 const email = ref('')
 const password = ref('')
-const selectedRole = ref('owner') // 'owner' or 'employee'
-const rememberMe = ref(false)
-const isLoading = ref(false)
+const phoneNo = ref('')
+const role = ref('')
 const errorMsg = ref('')
+const successMsg = ref('')
+const isLoading = ref(false)
+
+const roleOptions = [
+  { label: 'Supervisor', value: 'supervisor' },
+  { label: 'Sales Staff', value: 'sales_staff' },
+  { label: 'Store Manager', value: 'store_manager' },
+  { label: 'Inventory Manager', value: 'inventory_manager' },
+]
 
 const handleSubmit = () => {
   errorMsg.value = ''
+  successMsg.value = ''
+
+  if (!name.value.trim()) {
+    errorMsg.value = 'Please enter your name'
+    return
+  }
 
   if (!email.value.includes('@')) {
     errorMsg.value = 'Please enter a valid email address'
@@ -27,7 +40,12 @@ const handleSubmit = () => {
     return
   }
 
-  if (!selectedRole.value) {
+  if (!phoneNo.value.trim()) {
+    errorMsg.value = 'Please enter your phone number'
+    return
+  }
+
+  if (!role.value) {
     errorMsg.value = 'Please select a role'
     return
   }
@@ -35,24 +53,11 @@ const handleSubmit = () => {
   isLoading.value = true
 
   setTimeout(() => {
-    // Create mock user object based on selected role
-    const mockUser = {
-      id: 1,
-      name: selectedRole.value === 'owner' ? 'Rajesh Patel' : 'Ravi Kumar',
-      email: email.value,
-      role: selectedRole.value,
-    }
-
-    // Use auth store to login
-    authStore.login(mockUser, selectedRole.value)
+    successMsg.value = 'Registration successful! Redirecting to login...'
     isLoading.value = false
-
-    // Redirect based on role
-    if (selectedRole.value === 'employee') {
-      router.push('/shift-login')
-    } else {
-      router.push('/dashboard')
-    }
+    setTimeout(() => {
+      router.push('/login')
+    }, 1500)
   }, 1500)
 }
 
@@ -99,10 +104,10 @@ const features = [
             <!-- Headline -->
             <div class="space-y-4">
               <h1 class="text-5xl lg:text-6xl font-bold text-slate-900 leading-tight">
-                Run Your Retail Store Smarter
+                Join Our Team
               </h1>
               <p class="text-xl text-slate-600 leading-relaxed">
-                Inventory tracking, billing, analytics and supplier management in one platform.
+                Register as an employee and start managing your retail store with smart tools.
               </p>
             </div>
 
@@ -132,7 +137,7 @@ const features = [
           </div>
         </Transition>
 
-        <!-- Right side - Login Form -->
+        <!-- Right side - Registration Form -->
         <Transition name="fade-in-right">
           <div class="flex items-center justify-center lg:justify-start">
             <div class="w-full max-w-sm">
@@ -141,44 +146,26 @@ const features = [
                 
                 <!-- Form Heading -->
                 <div class="mb-8">
-                  <h2 class="text-2xl font-bold text-slate-900">Welcome back</h2>
-                  <p class="text-slate-600 text-sm mt-2">Sign in to your store dashboard</p>
+                  <h2 class="text-2xl font-bold text-slate-900">Employee Registration</h2>
+                  <p class="text-slate-600 text-sm mt-2">Create your employee account</p>
                 </div>
 
                 <!-- Form -->
                 <form class="space-y-5" @submit.prevent="handleSubmit">
                   
-                  <!-- Role Selection -->
+                  <!-- Name -->
                   <div>
-                    <label class="block text-sm font-medium text-slate-900 mb-3">
-                      Login As
+                    <label class="block text-sm font-medium text-slate-900 mb-2">
+                      Name
                     </label>
-                    <div class="grid grid-cols-2 gap-3">
-                      <label class="relative flex items-center cursor-pointer">
-                        <input
-                          v-model="selectedRole"
-                          type="radio"
-                          value="owner"
-                          class="sr-only"
-                        />
-                        <div :class="['w-full px-4 py-3 rounded-lg border-2 text-center font-medium transition-all', selectedRole === 'owner' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-300 bg-white text-slate-700 hover:border-emerald-300']">
-                          👔 Owner
-                        </div>
-                      </label>
-                      <label class="relative flex items-center cursor-pointer">
-                        <input
-                          v-model="selectedRole"
-                          type="radio"
-                          value="employee"
-                          class="sr-only"
-                        />
-                        <div :class="['w-full px-4 py-3 rounded-lg border-2 text-center font-medium transition-all', selectedRole === 'employee' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-300 bg-white text-slate-700 hover:border-emerald-300']">
-                          👷 Employee
-                        </div>
-                      </label>
-                    </div>
+                    <input
+                      v-model="name"
+                      type="text"
+                      placeholder="John Doe"
+                      class="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                    />
                   </div>
-                  
+
                   <!-- Email -->
                   <div>
                     <label class="block text-sm font-medium text-slate-900 mb-2">
@@ -187,7 +174,7 @@ const features = [
                     <input
                       v-model="email"
                       type="email"
-                      :placeholder="selectedRole === 'owner' ? 'owner@example.com' : 'employee@example.com'"
+                      placeholder="you@example.com"
                       class="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
                     />
                   </div>
@@ -205,19 +192,33 @@ const features = [
                     />
                   </div>
 
-                  <!-- Remember Me -->
-                  <div class="flex items-center justify-between text-sm">
-                    <label class="flex items-center gap-2 cursor-pointer">
-                      <input 
-                        v-model="rememberMe"
-                        type="checkbox" 
-                        class="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                      />
-                      <span class="text-slate-700">Remember me</span>
+                  <!-- Phone Number -->
+                  <div>
+                    <label class="block text-sm font-medium text-slate-900 mb-2">
+                      Phone Number
                     </label>
-                    <a href="#" class="text-emerald-600 hover:text-emerald-700 font-medium">
-                      Forgot password?
-                    </a>
+                    <input
+                      v-model="phoneNo"
+                      type="tel"
+                      placeholder="+1 (234) 567-8900"
+                      class="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                    />
+                  </div>
+
+                  <!-- Role -->
+                  <div>
+                    <label class="block text-sm font-medium text-slate-900 mb-2">
+                      Role
+                    </label>
+                    <select
+                      v-model="role"
+                      class="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all bg-white"
+                    >
+                      <option value="">Select a role</option>
+                      <option v-for="opt in roleOptions" :key="opt.value" :value="opt.value">
+                        {{ opt.label }}
+                      </option>
+                    </select>
                   </div>
 
                   <!-- Error Message -->
@@ -227,6 +228,16 @@ const features = [
                         <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
                       </svg>
                       <span>{{ errorMsg }}</span>
+                    </div>
+                  </Transition>
+
+                  <!-- Success Message -->
+                  <Transition name="fade">
+                    <div v-if="successMsg" class="bg-green-50 border border-green-200 text-green-700 rounded-lg p-3.5 text-sm flex items-start gap-3">
+                      <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                      </svg>
+                      <span>{{ successMsg }}</span>
                     </div>
                   </Transition>
 
@@ -240,26 +251,18 @@ const features = [
                       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    {{ isLoading ? 'Signing in...' : 'Sign In' }}
+                    {{ isLoading ? 'Registering...' : 'Register' }}
                   </button>
-
-                  <!-- Sign Up Link -->
-                  <div class="text-center text-sm mt-4">
-                    <span class="text-slate-600">New to Sonik? </span>
-                    <router-link to="/register" class="text-emerald-600 hover:text-emerald-700 font-semibold">
-                      Sign up here
-                    </router-link>
-                  </div>
 
                 </form>
 
                 <!-- Footer -->
                 <div class="mt-8 pt-6 border-t border-slate-200">
                   <p class="text-center text-xs text-slate-600">
-                    By signing in, you agree to our
-                    <a href="#" class="text-slate-900 hover:text-slate-700 font-medium">Terms</a>
-                    and
-                    <a href="#" class="text-slate-900 hover:text-slate-700 font-medium">Privacy Policy</a>
+                    Already have an account?
+                    <router-link to="/login" class="text-emerald-600 hover:text-emerald-700 font-medium">
+                      Sign in
+                    </router-link>
                   </p>
                 </div>
 
