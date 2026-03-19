@@ -14,8 +14,29 @@ const rememberMe = ref(false)
 const isLoading = ref(false)
 const errorMsg = ref('')
 
-const handleSubmit = () => {
-  errorMsg.value = ''
+// const handleSubmit = () => {
+//   errorMsg.value = ''
+
+//   if (!email.value.includes('@')) {
+//     errorMsg.value = 'Please enter a valid email address'
+//     return
+//   }
+
+//   if (password.value.length < 6) {
+//     errorMsg.value = 'Password must be at least 6 characters'
+//     return
+//   }
+
+//   isLoading.value = true
+
+//   setTimeout(() => {
+//     localStorage.setItem('sonik_auth', 'true')
+//     isLoading.value = false
+//     router.push('/dashboard')
+//   }, 1500)
+// }
+const handleSubmit = async () => {
+  errorMsg.value = ""
 
   if (!email.value.includes('@')) {
     errorMsg.value = 'Please enter a valid email address'
@@ -56,6 +77,13 @@ const handleSubmit = () => {
   }, 1500)
 }
 
+  } catch (error) {
+    console.error(error)
+    errorMsg.value = "Server error, try again"
+  } finally {
+    isLoading.value = false
+  }
+}
 const features = [
   { 
     icon: BarChart3, 
