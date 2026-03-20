@@ -1,4 +1,4 @@
-<script setup>
+<!-- <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { BarChart3, Package, ShieldCheck } from 'lucide-vue-next'
@@ -78,8 +78,118 @@ const features = [
     desc: 'Manage relationships and payment terms' 
   },
 ]
-</script>
+</script> -->
+<script setup>
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { BarChart3, Package, ShieldCheck } from 'lucide-vue-next'
+import api from '@/utils/api'   // ✅ IMPORTANT
 
+const router = useRouter()
+
+const name = ref('')
+const email = ref('')
+const password = ref('')
+const phoneNo = ref('')
+const role = ref('')
+const errorMsg = ref('')
+const successMsg = ref('')
+const isLoading = ref(false)
+
+const roleOptions = [
+  { label: 'Supervisor', value: 'Supervisor' },
+  { label: 'Sales Staff', value: 'Sales_staff' },
+  { label: 'Store Manager', value: 'Store_manager' },
+  { label: 'Inventory Manager', value: 'Inventory_manager' },
+]
+
+const handleSubmit = async () => {
+  errorMsg.value = ''
+  successMsg.value = ''
+
+  // ✅ Validation
+  if (!name.value.trim()) {
+    errorMsg.value = 'Please enter your name'
+    return
+  }
+
+  if (!email.value.includes('@')) {
+    errorMsg.value = 'Please enter a valid email address'
+    return
+  }
+
+  if (password.value.length < 6) {
+    errorMsg.value = 'Password must be at least 6 characters'
+    return
+  }
+
+  if (!phoneNo.value.trim()) {
+    errorMsg.value = 'Please enter your phone number'
+    return
+  }
+
+  if (!role.value) {
+    errorMsg.value = 'Please select a role'
+    return
+  }
+
+  try {
+    isLoading.value = true
+
+    // ✅ CALL BACKEND API
+    await api.post('/users/', {
+      name: name.value,
+      email: email.value,
+      password: password.value,
+      phone: phoneNo.value,   // match backend field
+      role: role.value
+    })
+
+    successMsg.value = 'Registration successful! Redirecting to login...'
+
+    // reset form
+    name.value = ''
+    email.value = ''
+    password.value = ''
+    phoneNo.value = ''
+    role.value = ''
+
+    setTimeout(() => {
+      router.push('/login')
+    }, 1500)
+
+  } catch (error) {
+    console.error(error)
+
+    if (error.response?.data?.detail) {
+      errorMsg.value = error.response.data.detail
+    } else {
+      errorMsg.value = 'Something went wrong. Please try again.'
+    }
+
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const features = [
+  { 
+    icon: BarChart3, 
+    title: 'Smart Sales Analytics', 
+    desc: 'Real-time insights into your store performance' 
+  },
+  { 
+    icon: Package, 
+    title: 'Real-time Inventory', 
+    desc: 'Track stock levels across your store' 
+  },
+  { 
+    icon: ShieldCheck, 
+    title: 'Supplier & Credit Tracking', 
+    desc: 'Manage relationships and payment terms' 
+  },
+]
+</script>
 <template>
   <div class="min-h-screen bg-gradient-to-b from-slate-50 to-white">
     <!-- Header -->

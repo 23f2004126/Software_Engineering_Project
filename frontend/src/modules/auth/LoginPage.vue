@@ -1,43 +1,31 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '../../stores/authStore.js'
+import { useAuthStore } from '@/stores/authStore'
+import api from '@/utils/api'
 import { BarChart3, Package, ShieldCheck } from 'lucide-vue-next'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
+// =========================
+// FORM STATE
+// =========================
 const email = ref('')
 const password = ref('')
-const selectedRole = ref('owner') // 'owner' or 'employee'
+const selectedRole = ref('owner') // owner or employee
 const rememberMe = ref(false)
+
 const isLoading = ref(false)
 const errorMsg = ref('')
 
-// const handleSubmit = () => {
-//   errorMsg.value = ''
-
-//   if (!email.value.includes('@')) {
-//     errorMsg.value = 'Please enter a valid email address'
-//     return
-//   }
-
-//   if (password.value.length < 6) {
-//     errorMsg.value = 'Password must be at least 6 characters'
-//     return
-//   }
-
-//   isLoading.value = true
-
-//   setTimeout(() => {
-//     localStorage.setItem('sonik_auth', 'true')
-//     isLoading.value = false
-//     router.push('/dashboard')
-//   }, 1500)
-// }
+// =========================
+// LOGIN FUNCTION
+// =========================
 const handleSubmit = async () => {
-  errorMsg.value = ""
+  errorMsg.value = ''
 
+  // ✅ Validation
   if (!email.value.includes('@')) {
     errorMsg.value = 'Please enter a valid email address'
     return
@@ -48,61 +36,62 @@ const handleSubmit = async () => {
     return
   }
 
-  if (!selectedRole.value) {
-    errorMsg.value = 'Please select a role'
-    return
-  }
-
   isLoading.value = true
 
-  setTimeout(() => {
-    // Create mock user object based on selected role
-    const mockUser = {
-      id: 1,
-      name: selectedRole.value === 'owner' ? 'Rajesh Patel' : 'Ravi Kumar',
+  try {
+    const res = await api.post('/auth/login', {
       email: email.value,
-      role: selectedRole.value,
+      password: password.value
+    })
+
+    const user = res.data.user
+
+    // ✅ Save in store
+    authStore.login(user, user.role)
+
+    // ✅ Optional: remember user
+    if (rememberMe.value) {
+      localStorage.setItem('sonik_user', JSON.stringify(user))
     }
 
-    // Use auth store to login
-    authStore.login(mockUser, selectedRole.value)
-    isLoading.value = false
-
-    // Redirect based on role
-    if (selectedRole.value === 'employee') {
+    // ✅ Redirect based on role
+    if (user.role === 'employee') {
       router.push('/shift-login')
     } else {
       router.push('/dashboard')
     }
-  }, 1500)
-}
 
   } catch (error) {
     console.error(error)
-    errorMsg.value = "Server error, try again"
+
+    errorMsg.value =
+      error.response?.data?.detail || 'Invalid email or password'
   } finally {
     isLoading.value = false
   }
 }
+
+// =========================
+// FEATURES (UI)
+// =========================
 const features = [
-  { 
-    icon: BarChart3, 
-    title: 'Smart Sales Analytics', 
-    desc: 'Real-time insights into your store performance' 
+  {
+    icon: BarChart3,
+    title: 'Smart Sales Analytics',
+    desc: 'Real-time insights into your store performance'
   },
-  { 
-    icon: Package, 
-    title: 'Real-time Inventory', 
-    desc: 'Track stock levels across your store' 
+  {
+    icon: Package,
+    title: 'Real-time Inventory',
+    desc: 'Track stock levels across your store'
   },
-  { 
-    icon: ShieldCheck, 
-    title: 'Supplier & Credit Tracking', 
-    desc: 'Manage relationships and payment terms' 
-  },
+  {
+    icon: ShieldCheck,
+    title: 'Supplier & Credit Tracking',
+    desc: 'Manage relationships and payment terms'
+  }
 ]
 </script>
-
 <template>
   <div class="min-h-screen bg-gradient-to-b from-slate-50 to-white">
     <!-- Header -->
