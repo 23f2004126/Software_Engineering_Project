@@ -1,16 +1,31 @@
 <script setup>
 import { useRouter, useRoute } from 'vue-router'
+import { useAuthStore } from '../../stores/authStore.js'
 import { MENU_ITEMS } from '../../constants/menuItems.js'
 import { getIcon } from '../../utils/iconMap.js'
 import { computed } from 'vue'
 
 const router = useRouter()
 const route = useRoute()
+const authStore = useAuthStore()
+
+// Filter menu items based on role
+const filteredMenuItems = computed(() => {
+  if (authStore.isEmployee) {
+    // Employees see only: Dashboard, Billing, Inventory, Milk Daily Entry, Shift Report
+    return MENU_ITEMS.filter(item => {
+      const employeeAllowed = ['Dashboard', 'Billing', 'Inventory', 'Milk Daily Entry', 'Shift Report']
+      return employeeAllowed.includes(item.label)
+    })
+  }
+  // Owners see all items
+  return MENU_ITEMS
+})
 
 // Group menu items by section
 const groupedMenuItems = computed(() => {
   const groups = {}
-  MENU_ITEMS.forEach((item) => {
+  filteredMenuItems.value.forEach((item) => {
     if (!groups[item.section]) {
       groups[item.section] = []
     }
@@ -19,7 +34,13 @@ const groupedMenuItems = computed(() => {
   return groups
 })
 
-const sections = ['MAIN', 'MANAGE', 'REPORTS']
+// Determine which sections to display based on role
+const visibleSections = computed(() => {
+  if (authStore.isEmployee) {
+    return ['MAIN', 'MANAGE', 'SHIFT']
+  }
+  return ['MAIN', 'MANAGE', 'REPORTS']
+})
 
 const isActive = (path) => {
   if (path === '/dashboard') {
@@ -29,9 +50,26 @@ const isActive = (path) => {
 }
 
 const logout = () => {
-  localStorage.removeItem('sonik_auth')
+  authStore.logout()
   router.push('/login')
 }
+
+// Get user initials for avatar
+const userInitials = computed(() => {
+  if (authStore.user?.name) {
+    return authStore.user.name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+  }
+  return 'UK'
+})
+
+// Get role display text
+const roleDisplay = computed(() => {
+  return authStore.isOwner ? 'Owner' : 'Employee'
+})
 </script>
 
 <template>
@@ -48,13 +86,14 @@ const logout = () => {
 
     <!-- Navigation -->
     <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-6">
-      <div v-for="section in sections" :key="section">
+      <div v-for="section in visibleSections" :key="section">
         <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 py-2 mt-2">
           {{ section }}
         </p>
         <div class="space-y-1">
           <RouterLink
             v-for="item in groupedMenuItems[section]"
+            v-if="groupedMenuItems[section]"
             :key="item.path"
             :to="item.path"
             class="relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors"
@@ -85,12 +124,12 @@ const logout = () => {
     <div class="px-4 py-4 border-t border-slate-100">
       <div class="flex items-center gap-3">
         <div class="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
-          RK
+          {{ userInitials }}
         </div>
         <div class="flex-1 min-w-0">
-          <p class="text-sm font-medium text-slate-900 truncate">Ravi Kumar</p>
+          <p class="text-sm font-medium text-slate-900 truncate">{{ authStore.user?.name || 'User' }}</p>
           <span class="inline-block bg-emerald-100 text-emerald-700 text-xs px-1.5 py-0.5 rounded font-medium mt-0.5">
-            Manager
+            {{ roleDisplay }}
           </span>
         </div>
       </div>

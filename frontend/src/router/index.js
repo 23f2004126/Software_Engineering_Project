@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '../stores/authStore.js'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -36,13 +37,13 @@ const router = createRouter({
       path: '/sales',
       name: 'SalesHistory',
       component: () => import('../modules/billing/SalesHistoryPage.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true, ownerOnly: true },
     },
     {
       path: '/sales/:id',
       name: 'SaleDetails',
       component: () => import('../modules/billing/SaleDetailsPage.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true, ownerOnly: true },
     },
     {
       path: '/inventory',
@@ -54,13 +55,13 @@ const router = createRouter({
       path: '/inventory/add',
       name: 'AddProduct',
       component: () => import('../modules/inventory/AddEditProductPage.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true, ownerOnly: true },
     },
     {
       path: '/inventory/:id',
       name: 'EditProduct',
       component: () => import('../modules/inventory/AddEditProductPage.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true, ownerOnly: true },
     },
     {
       path: '/damage-loss',
@@ -72,19 +73,19 @@ const router = createRouter({
       path: '/finance',
       name: 'Finance',
       component: () => import('../modules/finance/FinancePage.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true, ownerOnly: true },
     },
     {
       path: '/credit',
       name: 'CreditManagement',
       component: () => import('../modules/credit/CreditManagementPage.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true, ownerOnly: true },
     },
     {
       path: '/credit/:id',
       name: 'CustomerProfile',
       component: () => import('../modules/credit/CustomerProfilePage.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true, ownerOnly: true },
     },
     {
       path: '/milk',
@@ -102,19 +103,19 @@ const router = createRouter({
       path: '/suppliers',
       name: 'Suppliers',
       component: () => import('../modules/suppliers/SuppliersPage.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true, ownerOnly: true },
     },
     {
       path: '/purchase-orders',
       name: 'PurchaseOrders',
       component: () => import('../modules/suppliers/PurchaseOrderPage.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true, ownerOnly: true },
     },
     {
       path: '/employees',
       name: 'Employees',
       component: () => import('../modules/employees/EmployeesPage.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true, ownerOnly: true },
     },
     {
       path: '/shift-report',
@@ -126,23 +127,75 @@ const router = createRouter({
       path: '/shift-reports',
       redirect: '/shift-report',
     },
+    {
+      path: '/register',
+      name: 'Register',
+      component: () => import('../modules/auth/RegistrationPage.vue'),
+    },
+    {
+      path: '/notifications',
+      name: 'Notifications',
+      component: () => import('../modules/billing/NotificationsPage.vue'),
+      meta: { requiresAuth: true, ownerOnly: true },
+    },
+    {
+      path: '/customers',
+      name: 'CustomerList',
+      component: () => import('../modules/credit/CustomerListPage.vue'),
+      meta: { requiresAuth: true, ownerOnly: true },
+    },
+    {
+      path: '/reports',
+      name: 'Reports',
+      component: () => import('../modules/reports/ReportsPage.vue'),
+      meta: { requiresAuth: true, ownerOnly: true },
+    },
   ],
 })
 
-// Navigation guard
+// Navigation guard to handle authentication and role-based access
 router.beforeEach((to, from, next) => {
-  const isAuthenticated = localStorage.getItem('sonik_auth') === 'true'
-
-  // Check if route requires authentication
-  if (to.meta.requiresAuth && !isAuthenticated) {
-    // Redirect to login if not authenticated
-    next('/login')
-  } else if ((to.path === '/login' || to.path === '/shift-login') && isAuthenticated) {
-    // Redirect to dashboard if already logged in and visiting login
-    next('/dashboard')
-  } else {
-    next()
+  const authStore = useAuthStore()
+  
+  // Restore session from localStorage on first load or page refresh
+  if (!authStore.isAuthenticated) {
+    authStore.restoreSession()
   }
+
+  const isAuthenticated = authStore.isAuthenticated
+  const isEmployee = authStore.isEmployee
+  const isOwner = authStore.isOwner
+  const shiftActive = authStore.shiftActive
+  const today = new Date().toISOString().split('T')[0]
+  const shiftDateStored = authStore.shiftDate
+
+  // Rule 1: If route requires auth and user is not authenticated → redirect to /login
+  if (to.meta.requiresAuth && !isAuthenticated) {
+    return next('/login')
+  }
+
+  // Rule 2: If user is employee and hasn't logged shift today → redirect to /shift-login (except on those pages)
+  if (isEmployee && isAuthenticated && !shiftActive && to.path !== '/shift-login' && to.path !== '/login') {
+    return next('/shift-login')
+  }
+
+  // Rule 3: If employee tries to access owner-only routes → redirect to dashboard
+  if (isEmployee && to.meta.ownerOnly) {
+    return next('/dashboard')
+  }
+
+  // Rule 4: If owner visits /shift-login → redirect to dashboard
+  if (isOwner && to.path === '/shift-login') {
+    return next('/dashboard')
+  }
+
+  // Rule 5: If already authenticated and visiting login → redirect to dashboard
+  if ((to.path === '/login') && isAuthenticated) {
+    return next('/dashboard')
+  }
+
+  next()
 })
 
 export default router
+

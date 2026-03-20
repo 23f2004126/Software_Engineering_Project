@@ -7,13 +7,13 @@ import Input from '../../components/ui/Input.vue'
 import Modal from '../../components/ui/Modal.vue'
 import { formatCurrency } from '../../utils/currency.js'
 
-const mockSubscribers = [
+const mockSubscribers = ref([
   { id: 1, name: 'Rajesh Patel', phone: '9876543210', quantity: 500, frequency: 'daily', startDate: '2025-01-15', status: 'active', amount: 500 },
   { id: 2, name: 'Priya Singh', phone: '9876543211', quantity: 1000, frequency: 'daily', startDate: '2024-11-20', status: 'active', amount: 1000 },
   { id: 3, name: 'Amit Kumar', phone: '9876543212', quantity: 250, frequency: 'alter', startDate: '2025-03-10', status: 'inactive', amount: 250 },
   { id: 4, name: 'Neha Verma', phone: '9876543213', quantity: 750, frequency: 'daily', startDate: '2025-02-05', status: 'active', amount: 750 },
   { id: 5, name: 'Vikram Desai', phone: '9876543214', quantity: 2000, frequency: 'daily', startDate: '2024-08-12', status: 'active', amount: 2000 },
-]
+])
 
 const showAddModal = ref(false)
 const showInvoiceDrawer = ref(false)
@@ -33,6 +33,13 @@ const mockInvoices = [
 ]
 
 const handleAddSubscriber = () => {
+  mockSubscribers.value.push({
+    id: mockSubscribers.value.length + 1,
+    ...newSubscriber.value,
+    startDate: new Date().toISOString().split('T')[0],
+    status: 'active',
+    amount: newSubscriber.value.quantity,
+  })
   showAddModal.value = false
   newSubscriber.value = {
     name: '',
@@ -42,8 +49,8 @@ const handleAddSubscriber = () => {
   }
 }
 
-const activeSubscribersCount = computed(() => mockSubscribers.filter((s) => s.status === 'active').length)
-const totalDailyQuantity = computed(() => mockSubscribers.filter((s) => s.status === 'active').reduce((sum, s) => sum + s.quantity, 0))
+const activeSubscribersCount = computed(() => mockSubscribers.value.filter((s) => s.status === 'active').length)
+const totalDailyQuantity = computed(() => mockSubscribers.value.filter((s) => s.status === 'active').reduce((sum, s) => sum + s.quantity, 0))
 const monthlyRevenue = computed(() => totalDailyQuantity.value * 30)
 
 const openInvoice = (subscriber) => {

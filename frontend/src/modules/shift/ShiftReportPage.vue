@@ -1,11 +1,16 @@
 <script setup>
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '../../stores/authStore.js'
 import MainLayout from '../../layouts/MainLayout.vue'
 import Card from '../../components/ui/Card.vue'
 import Button from '../../components/ui/Button.vue'
 import Table from '../../components/ui/Table.vue'
 import { formatCurrency } from '../../utils/currency.js'
 import { formatDate } from '../../utils/dateFormatter.js'
+
+const router = useRouter()
+const authStore = useAuthStore()
 
 const mockShifts = [
   { id: 1, employee: 'Ravi Kumar', date: '2025-06-05', startTime: '08:00', endTime: '16:00', duration: '8h', sales: 4200, transactions: 12, anomaly: null, performance: 92 },
@@ -16,10 +21,21 @@ const mockShifts = [
   { id: 6, employee: 'Anjali Nair', date: '2025-06-04', startTime: '10:30', endTime: '17:30', duration: '7h', sales: 800, transactions: 2, anomaly: 'Extended Break', performance: 35 },
 ]
 
+// For employee, get only their current shift
+const currentEmployeeShift = computed(() => {
+  if (authStore.isOwner) return null
+  return mockShifts.find(s => s.employee === authStore.user?.name)
+})
+
 const filterEmployee = ref('all')
 const filterDate = ref('all')
 
 const filteredShifts = computed(() => {
+  if (authStore.isEmployee && currentEmployeeShift.value) {
+    // Employees only see their own shift
+    return [currentEmployeeShift.value]
+  }
+  // Owners see all shifts
   return mockShifts.filter((shift) => {
     if (filterEmployee.value !== 'all' && shift.employee !== filterEmployee.value) return false
     if (filterDate.value !== 'all' && shift.date !== filterDate.value) return false
@@ -54,19 +70,39 @@ const performanceColor = (score) => {
   if (score >= 70) return 'text-amber-600'
   return 'text-red-600'
 }
+
+const handleEndShift = () => {
+  // End shift using auth store
+  authStore.endShift()
+  // Redirect to login
+  router.push('/login')
+}
 </script>
 
 <template>
   <MainLayout>
     <div class="space-y-6">
       <!-- Header -->
-      <div>
-        <h1 class="text-2xl font-bold text-slate-900">Shift Reports</h1>
-        <p class="text-sm text-slate-500 mt-1">Monitor employee shifts and performance metrics</p>
+      <div v-if="authStore.isOwner" class="flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-900">Shift Reports</h1>
+          <p class="text-sm text-slate-500 mt-1">Monitor employee shifts and performance metrics</p>
+        </div>
       </div>
 
-      <!-- Filters -->
-      <Card>
+      <!-- Employee Header -->
+      <div v-if="authStore.isEmployee" class="flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-900">Shift Report</h1>
+          <p class="text-sm text-slate-500 mt-1">Summary of your shift sales and activity</p>
+        </div>
+        <Button variant="danger" @click="handleEndShift">
+          End Shift
+        </Button>
+      </div>
+
+      <!-- Filters (Owner only) -->
+      <Card v-if="authStore.isOwner">
         <div class="flex gap-4 items-end">
           <div class="flex-1">
             <label class="block text-sm font-medium text-slate-700 mb-1">Employee</label>
@@ -95,8 +131,8 @@ const performanceColor = (score) => {
         </div>
       </Card>
 
-      <!-- Anomalies Panel -->
-      <Card v-if="anomalyShifts.length > 0" class="bg-red-50 border-red-100">
+      <!-- Anomalies Panel (Owner only) -->
+      <Card v-if="authStore.isOwner && anomalyShifts.length > 0" class="bg-red-50 border-red-100">
         <template #header>
           <div class="flex items-center gap-2">
             <span class="text-2xl">⚠️</span>
@@ -136,8 +172,8 @@ const performanceColor = (score) => {
         </div>
       </Card>
 
-      <!-- Summary Stats -->
-      <div class="grid grid-cols-4 gap-4">
+      <!-- Summary Stats (Owner only) -->
+      <div v-if="authStore.isOwner" class="grid grid-cols-4 gap-4">
         <Card>
           <p class="text-xs font-semibold text-slate-400 uppercase">Total Sales</p>
           <p class="font-mono text-3xl font-bold text-emerald-600 mt-2">{{ formatCurrency(totalSales) }}</p>
@@ -156,8 +192,24 @@ const performanceColor = (score) => {
         </Card>
       </div>
 
-      <!-- Shifts Table -->
-      <Card padding="none">
+      <!-- Employee Summary (Employee only) -->
+      <div v-if="authStore.isEmployee && currentEmployeeShift" class="grid grid-cols-3 gap-4">
+        <Card>
+          <p class="text-xs font-semibold text-slate-400 uppercase">Today's Sales</p>
+          <p class="font-mono text-3xl font-bold text-emerald-600 mt-2">{{ formatCurrency(currentEmployeeShift.sales) }}</p>
+        </Card>
+        <Card>
+          <p class="text-xs font-semibold text-slate-400 uppercase">Transactions</p>
+          <p class="font-mono text-3xl font-bold text-slate-900 mt-2">{{ currentEmployeeShift.transactions }}</p>
+        </Card>
+        <Card>
+          <p class="text-xs font-semibold text-slate-400 uppercase">Performance</p>
+          <p class="font-mono text-3xl font-bold text-blue-600 mt-2">{{ currentEmployeeShift.performance }}%</p>
+        </Card>
+      </div>
+
+      <!-- Shifts Table / Employee Report -->
+      <Card v-if="authStore.isOwner" padding="none">
         <Table
           :columns="[
             { key: 'employee', label: 'Employee' },
@@ -203,6 +255,31 @@ const performanceColor = (score) => {
             </span>
           </template>
         </Table>
+      </Card>
+
+      <!-- Employee Shift Report (Employee only) -->
+      <Card v-if="authStore.isEmployee && currentEmployeeShift" class="bg-gradient-to-br from-slate-50 to-slate-100">
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-lg font-semibold text-slate-900">Shift Details</h3>
+              <p class="text-sm text-slate-600 mt-1">{{ formatDate(currentEmployeeShift.date, 'long') }}</p>
+            </div>
+            <span class="text-3xl" :class="currentEmployeeShift.performance >= 80 ? 'text-emerald-600' : 'text-amber-600'">
+              ✓
+            </span>
+          </div>
+          <div class="grid grid-cols-2 gap-4 pt-2 border-t border-slate-200">
+            <div>
+              <p class="text-xs font-semibold text-slate-500 uppercase">Shift Time</p>
+              <p class="text-sm font-semibold text-slate-900 mt-1">{{ currentEmployeeShift.startTime }} - {{ currentEmployeeShift.endTime }}</p>
+            </div>
+            <div>
+              <p class="text-xs font-semibold text-slate-500 uppercase">Duration</p>
+              <p class="text-sm font-semibold text-slate-900 mt-1">{{ currentEmployeeShift.duration }}</p>
+            </div>
+          </div>
+        </div>
       </Card>
     </div>
   </MainLayout>

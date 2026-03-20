@@ -7,19 +7,14 @@
 // })
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import { fileURLToPath } from 'node:url'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [vue()],
-  server: {
-    port: 5173, // 
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8000', // FastAPI backend URL
-        changeOrigin: true,
-        secure: false,
-        rewrite: (path) => path.replace(/^\/api/, ''), // optional, depends on your backend routes
-      },
-    },
-  },
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url))
+    }
+  }
 })
