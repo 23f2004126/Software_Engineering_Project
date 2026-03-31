@@ -1,24 +1,15 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import MainLayout from '../../layouts/MainLayout.vue'
 import Card from '../../components/ui/Card.vue'
 import Button from '../../components/ui/Button.vue'
 import Input from '../../components/ui/Input.vue'
 import Modal from '../../components/ui/Modal.vue'
 import { formatCurrency } from '../../utils/currency.js'
+import { apiCall } from '../../utils/api.js'
 
-const mockProducts = [
-  { id: 1, name: 'Amul Butter 100g', category: 'Dairy', price: 58, stock: 24 },
-  { id: 2, name: 'Tata Salt 1kg', category: 'Grains', price: 22, stock: 48 },
-  { id: 3, name: 'Aashirvaad Atta 5kg', category: 'Grains', price: 285, stock: 6 },
-  { id: 4, name: 'Britannia Bread', category: 'Bakery', price: 45, stock: 12 },
-  { id: 5, name: 'Amul Gold 500ml', category: 'Dairy', price: 34, stock: 18 },
-  { id: 6, name: 'Parle-G 800g', category: 'Snacks', price: 85, stock: 30 },
-  { id: 7, name: 'Fortune Oil 1L', category: 'Grocery', price: 145, stock: 8 },
-  { id: 8, name: 'Maggi 2-min 12pk', category: 'Snacks', price: 132, stock: 15 },
-  { id: 9, name: 'Colgate 200g', category: 'Personal', price: 98, stock: 20 },
-  { id: 10, name: 'Surf Excel 1kg', category: 'Personal', price: 215, stock: 9 },
-]
+const router = useRouter()
 
 const searchQuery = ref('')
 const cartItems = ref([])
@@ -29,15 +20,22 @@ const gstEnabled = ref(true)
 const selectedCustomer = ref(null)
 const customerSearch = ref('')
 const showCustomerDropdown = ref(false)
+const searchResults = ref([])
+const loading = ref(false)
+const submitting = ref(false)
+const error = ref('')
+const showSuccessModal = ref(false)
+const generatedBill = ref(null)
 
+// Computed properties
 const filteredProducts = computed(() => {
-  return mockProducts.filter((p) =>
+  return searchResults.value.filter((p) =>
     p.name.toLowerCase().includes(searchQuery.value.toLowerCase())
   )
 })
 
 const subtotal = computed(() => {
-  return cartItems.value.reduce((sum, item) => sum + item.quantity * item.price, 0)
+  return cartItems.value.reduce((sum, item) => sum + item.quantity * (item.unit_price || item.price), 0)
 })
 
 const discountAmount = computed(() => {
@@ -58,24 +56,113 @@ const total = computed(() => {
   return subtotal.value - discountAmount.value + gstAmount.value
 })
 
+// API calls
+const searchProducts = async (query) => {
+  if (!query || query.length < 1) {
+    searchResults.value = []
+    return
+  }
+
+  try {
+    loading.value = true
+    const response = await apiCall(`/api/sales/products/search?q=${encodeURIComponent(query)}`, 'GET')
+    searchResults.value = response
+  } catch (err) {
+    console.error('Product search error:', err)
+    searchResults.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
 const addToCart = (product) => {
-  const existing = cartItems.value.find((item) => item.id === product.id)
+  const existing = cartItems.value.find((item) => item.product_id === product.product_id)
   if (existing) {
     existing.quantity++
   } else {
-    cartItems.value.push({ ...product, quantity: 1 })
+    cartItems.value.push({ 
+      ...product, 
+      product_id: product.product_id,
+      quantity: 1,
+      unit_price: product.price 
+    })
   }
   searchQuery.value = ''
+  searchResults.value = []
 }
 
 const removeFromCart = (productId) => {
-  cartItems.value = cartItems.value.filter((item) => item.id !== productId)
+  cartItems.value = cartItems.value.filter((item) => item.product_id !== productId)
 }
 
 const updateQuantity = (productId, newQty) => {
-  const item = cartItems.value.find((i) => i.id === productId)
-  if (item) item.quantity = Math.max(1, newQty)
+  const item = cartItems.value.find((i) => i.product_id === productId)
+  if (item) item.quantity = Math.max(1, parseInt(newQty) || 1)
 }
+
+const generateBill = async () => {
+  if (cartItems.value.length === 0) {
+    error.value = 'Cart is empty. Add products to generate a bill.'
+    return
+  }
+
+  try {
+    submitting.value = true
+    error.value = ''
+
+    // Prepare sale items
+    const items = cartItems.value.map(item => ({
+      product_id: item.product_id,
+      quantity: item.quantity,
+      unit_price: parseFloat(item.unit_price || item.price),
+      discount: 0,
+      tax_amount: ((item.unit_price || item.price) * item.quantity * 0.05),
+      subtotal: (item.unit_price || item.price) * item.quantity
+    }))
+
+    // Prepare sale data
+    const saleData = {
+      customer_id: selectedCustomer.value?.customer_id || null,
+      payment_method: paymentMode.value,
+      discount_amount: parseFloat(discountAmount.value) || 0,
+      items: items
+    }
+
+    // Create sale via API
+    const response = await apiCall('/api/sales', 'POST', saleData)
+    
+    generatedBill.value = response
+    showSuccessModal.value = true
+    
+    // Clear cart after successful bill generation
+    cartItems.value = []
+    discount.value = 0
+    selectedCustomer.value = null
+    paymentMode.value = 'cash'
+  } catch (err) {
+    error.value = err.message || 'Failed to generate bill'
+    console.error('Bill generation error:', err)
+  } finally {
+    submitting.value = false
+  }
+}
+
+const viewBillDetails = () => {
+  if (generatedBill.value) {
+    router.push(`/sales/${generatedBill.value.bill_id}`)
+    showSuccessModal.value = false
+  }
+}
+
+// Watchers
+const handleSearchInput = (value) => {
+  searchQuery.value = value
+  searchProducts(value)
+}
+
+onMounted(() => {
+  // Load initial products or categories if needed
+})
 </script>
 
 <template>
@@ -85,7 +172,13 @@ const updateQuantity = (productId, newQty) => {
       <div class="col-span-3 space-y-4">
         <!-- Search and filters -->
         <div class="space-y-3">
-          <Input v-model="searchQuery" type="search" placeholder="Search products..." icon="search" />
+          <Input 
+            :value="searchQuery" 
+            @input="handleSearchInput"
+            type="search" 
+            placeholder="Search products..." 
+            icon="search" 
+          />
 
           <!-- Category chips -->
           <div class="flex gap-2 overflow-x-auto">
@@ -109,12 +202,12 @@ const updateQuantity = (productId, newQty) => {
           <div class="space-y-2">
             <button
               v-for="prod in filteredProducts"
-              :key="prod.id"
+              :key="prod.product_id"
               class="w-full text-left px-4 py-2.5 hover:bg-slate-50 rounded-lg transition-colors border-b border-slate-100 last:border-0"
               @click="addToCart(prod)"
             >
               <p class="text-sm font-medium text-slate-900">{{ prod.name }}</p>
-              <p class="text-xs text-slate-500">₹{{ prod.price }} × {{ prod.stock }} in stock</p>
+              <p class="text-xs text-slate-500">₹{{ prod.price }} × {{ prod.stock_quantity }} in stock</p>
             </button>
           </div>
         </Card>
@@ -142,17 +235,17 @@ const updateQuantity = (productId, newQty) => {
           <div v-else class="space-y-0">
             <div
               v-for="item in cartItems"
-              :key="item.id"
+              :key="item.product_id"
               class="flex items-center justify-between py-3 border-b border-slate-100 last:border-0"
             >
               <div class="flex-1">
                 <p class="text-sm font-medium text-slate-900">{{ item.name }}</p>
-                <p class="text-xs text-slate-500">₹{{ item.price }} each</p>
+                <p class="text-xs text-slate-500">₹{{ item.unit_price || item.price }} each</p>
               </div>
               <div class="flex items-center gap-2">
                 <button
                   class="w-6 h-6 rounded border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-sm"
-                  @click="updateQuantity(item.id, item.quantity - 1)"
+                  @click="updateQuantity(item.product_id, item.quantity - 1)"
                 >
                   −
                 </button>
@@ -160,21 +253,21 @@ const updateQuantity = (productId, newQty) => {
                   :value="item.quantity"
                   type="number"
                   class="w-10 text-center text-sm font-semibold border border-slate-200 rounded px-1"
-                  @change="updateQuantity(item.id, $event.target.value)"
+                  @change="updateQuantity(item.product_id, $event.target.value)"
                 />
                 <button
                   class="w-6 h-6 rounded border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-sm"
-                  @click="updateQuantity(item.id, item.quantity + 1)"
+                  @click="updateQuantity(item.product_id, item.quantity + 1)"
                 >
                   +
                 </button>
               </div>
               <p class="font-mono font-semibold text-slate-900 w-20 text-right">
-                ₹{{ (item.price * item.quantity).toLocaleString('en-IN') }}
+                ₹{{ ((item.unit_price || item.price) * item.quantity).toLocaleString('en-IN') }}
               </p>
               <button
                 class="text-slate-400 hover:text-red-600 ml-2"
-                @click="removeFromCart(item.id)"
+                @click="removeFromCart(item.product_id)"
               >
                 ×
               </button>
@@ -185,6 +278,11 @@ const updateQuantity = (productId, newQty) => {
 
       <!-- RIGHT COLUMN: Summary & Payment -->
       <div class="col-span-2 space-y-4">
+        <!-- Error message -->
+        <div v-if="error" class="bg-red-50 border border-red-200 rounded-xl p-4">
+          <p class="text-sm text-red-700">{{ error }}</p>
+        </div>
+
         <!-- Order summary -->
         <Card>
           <template #header>
@@ -248,15 +346,21 @@ const updateQuantity = (productId, newQty) => {
         </Transition>
 
         <!-- Action buttons -->
-        <Button variant="primary" size="lg" fullWidth>
-          Generate Bill
+        <Button 
+          variant="primary" 
+          size="lg" 
+          fullWidth
+          :disabled="submitting || cartItems.length === 0"
+          @click="generateBill"
+        >
+          {{ submitting ? '⏳ Generating...' : 'Generate Bill' }}
         </Button>
 
         <div class="grid grid-cols-2 gap-3">
-          <Button variant="secondary" size="md" fullWidth>
+          <Button variant="secondary" size="md" fullWidth disabled>
             🖨 Print
           </Button>
-          <Button variant="secondary" size="md" fullWidth>
+          <Button variant="secondary" size="md" fullWidth disabled>
             ⬇ PDF
           </Button>
         </div>
@@ -275,6 +379,27 @@ const updateQuantity = (productId, newQty) => {
         </div>
       </div>
     </div>
+
+    <!-- Success Modal -->
+    <Modal v-if="showSuccessModal" @close="showSuccessModal = false">
+      <div class="text-center space-y-4">
+        <div class="w-16 h-16 mx-auto bg-emerald-100 rounded-full flex items-center justify-center">
+          <svg class="w-8 h-8 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+          </svg>
+        </div>
+        <h3 class="text-lg font-semibold text-slate-900">Bill Generated Successfully!</h3>
+        <p class="text-sm text-slate-600">
+          Receipt #{{ generatedBill?.receipt_number }}
+        </p>
+        <div class="bg-slate-50 rounded-xl p-4 text-left space-y-2">
+          <p class="text-sm"><span class="font-semibold">Total Amount:</span> ₹{{ formatCurrency(generatedBill?.total_amount) }}</p>
+          <p class="text-sm"><span class="font-semibold">Payment Mode:</span> {{ generatedBill?.payment_method }}</p>
+          <p class="text-sm"><span class="font-semibold">Status:</span> {{ generatedBill?.status }}</p>
+        </div>
+        <Button variant="primary" fullWidth @click="viewBillDetails">View Bill Details</Button>
+      </div>
+    </Modal>
   </MainLayout>
 </template>
 

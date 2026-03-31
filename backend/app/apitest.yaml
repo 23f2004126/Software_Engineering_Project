@@ -1,0 +1,882 @@
+openapi: 3.0.0
+
+info:
+  title: Sonik Retail Management API
+  description: |
+    Backend API for Retail Management System with POS, Inventory, and Sales Management
+    
+    **Base URL:** `http://localhost:8000`
+  version: 1.0.0
+
+server:
+  - url: http://localhost:8000
+    description: Development server
+
+tags:
+  - name: Authentication
+    description: User login and authentication
+  - name: Sales
+    description: Sales creation, history, and management
+  - name: Products
+    description: Product search and details
+  - name: Health
+    description: Service health checks
+
+# =========================
+# PATHS / ENDPOINTS
+# =========================
+paths:
+
+  # ============ AUTHENTICATION ============
+  /auth/login:
+    post:
+      summary: "User Login"
+      description: "Authenticate a user with email and password. Returns user details and role."
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            example:
+              email: "admin@example.com"
+              password: "admin123"
+      responses:
+        200:
+          description: "Login successful"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+              example:
+                message: "Login successful"
+                user:
+                  id: 1
+                  name: "Admin"
+                  email: "admin@example.com"
+                  role: "admin"
+                  designation: null
+        401:
+          description: "Invalid email or password"
+          content:
+            application/json:
+              example:
+                detail: "Invalid email or password"
+
+  # ============ PRODUCTS ============
+  /api/sales/products/search:
+    get:
+      summary: "Search Products"
+      description: "Live search products by name or barcode as cashier types. Returns matching products with stock and price."
+      tags:
+        - Products
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+          description: "Search query (product name or barcode)"
+          example: "milk"
+      responses:
+        200:
+          description: "List of matching products"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductSearchResponse"
+              example:
+                - product_id: 1
+                  name: "Full Cream Milk"
+                  price: 100.00
+                  stock_quantity: 50
+                  cost_price: 60.00
+                - product_id: 2
+                  name: "Toned Milk"
+                  price: 80.00
+                  stock_quantity: 75
+                  cost_price: 50.00
+        400:
+          description: "Validation error - search query required"
+          content:
+            application/json:
+              example:
+                detail: "Query parameter 'q' is required"
+
+  /api/sales/products/{product_id}:
+    get:
+      summary: "Get Product Details"
+      description: "Fetch a single product's full details including current stock, price, and cost."
+      tags:
+        - Products
+      parameters:
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: "Product ID"
+          example: 1
+      responses:
+        200:
+          description: "Product details"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductSearchResponse"
+              example:
+                product_id: 1
+                name: "Full Cream Milk"
+                price: 100.00
+                stock_quantity: 50
+                cost_price: 60.00
+        404:
+          description: "Product not found"
+          content:
+            application/json:
+              example:
+                detail: "Product not found"
+
+  # ============ SALES ============
+  /api/sales:
+    post:
+      summary: "Create a New Sale"
+      description: |
+        Create a new sale/bill with items.
+        
+        **Business Rules:**
+        - Stock will be decremented for each product
+        - Tax (5%) will be auto-calculated
+        - If payment mode is 'credit', amount deducted from customer's credit limit
+        - If any product is out of stock, sale is rejected
+        - A unique receipt number is generated for every transaction
+        - Sale status is 'paid' for cash/card/upi, 'pending' for credit
+      tags:
+        - Sales
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaleCreate"
+            example:
+              customer_id: 5
+              payment_method: "cash"
+              discount_amount: 10.00
+              items:
+                - product_id: 1
+                  quantity: 2
+                  unit_price: 100.00
+                  discount: 0.00
+                  tax_amount: 10.00
+                  subtotal: 210.00
+                - product_id: 2
+                  quantity: 1
+                  unit_price: 80.00
+                  discount: 0.00
+                  tax_amount: 4.00
+                  subtotal: 84.00
+      responses:
+        201:
+          description: "Sale created successfully"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaleResponse"
+              example:
+                bill_id: 42
+                customer_id: 5
+                user_id: 1
+                bill_date: "2025-01-15T10:30:00"
+                total_amount: 274.00
+                discount_amount: 10.00
+                tax_amount: 14.00
+                payment_method: "cash"
+                status: "paid"
+                receipt_number: "RCP-20250115-A7X9K2"
+                created_at: "2025-01-15T10:30:00"
+                updated_at: "2025-01-15T10:30:00"
+                items:
+                  - bill_item_id: 1
+                    product_id: 1
+                    quantity: 2
+                    unit_price: 100.00
+                    discount: 0.00
+                    tax_amount: 10.00
+                    subtotal: 210.00
+                transactions:
+                  - transaction_id: 1
+                    bill_id: 42
+                    amount: 274.00
+                    payment_mode: "cash"
+                    reference_no: null
+                    created_at: "2025-01-15T10:30:00"
+        400:
+          description: |
+            **Validation error.** Common reasons:
+            - Insufficient stock for product
+            - Discount greater than total amount
+            - Product not found
+          content:
+            application/json:
+              example:
+                detail: "Insufficient stock for Full Cream Milk. Available: 10, Requested: 50"
+        500:
+          description: "Server error during sale creation"
+          content:
+            application/json:
+              example:
+                detail: "Failed to decrement stock for product 1"
+
+    get:
+      summary: "Get Sales History"
+      description: "Retrieve paginated list of all past sales with optional filtering by date, customer, payment mode, and status."
+      tags:
+        - Sales
+      parameters:
+        - name: start_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: "Filter sales from this date (ISO format: YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)"
+          example: "2025-01-01"
+        - name: end_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: "Filter sales until this date (ISO format)"
+          example: "2025-01-31"
+        - name: payment_method
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["cash", "card", "upi", "credit"]
+          description: "Filter by payment method"
+          example: "cash"
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["paid", "pending", "cancelled"]
+          description: "Filter by sale status"
+          example: "paid"
+        - name: customer_id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: "Filter by specific customer"
+          example: 5
+        - name: skip
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+          description: "Pagination offset"
+          example: 0
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 100
+            minimum: 1
+            maximum: 1000
+          description: "Pagination limit (items per page)"
+          example: 50
+      responses:
+        200:
+          description: "List of sales"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SalesHistorySummary"
+              example:
+                - bill_id: 42
+                  receipt_number: "RCP-20250115-A7X9K2"
+                  customer_id: 5
+                  customer_name: "John Doe"
+                  bill_date: "2025-01-15T10:30:00"
+                  total_amount: 274.00
+                  discount_amount: 10.00
+                  tax_amount: 14.00
+                  payment_method: "cash"
+                  status: "paid"
+                - bill_id: 41
+                  receipt_number: "RCP-20250115-B5T2L9"
+                  customer_id: null
+                  customer_name: "Walk-in"
+                  bill_date: "2025-01-15T09:45:00"
+                  total_amount: 500.00
+                  discount_amount: 0.00
+                  tax_amount: 25.00
+                  payment_method: "card"
+                  status: "paid"
+        400:
+          description: "Invalid query parameters (e.g., bad date format)"
+          content:
+            application/json:
+              example:
+                detail: "Invalid start_date format. Use YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS"
+
+  /api/sales/{bill_id}:
+    get:
+      summary: "Get Sale Details"
+      description: "Fetch the full breakdown of a single sale including all items purchased, amounts, customer info, and payment details."
+      tags:
+        - Sales
+      parameters:
+        - name: bill_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: "Sale/Bill ID"
+          example: 42
+      responses:
+        200:
+          description: "Sale details with all items and transactions"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaleResponse"
+              example:
+                bill_id: 42
+                customer_id: 5
+                user_id: 1
+                bill_date: "2025-01-15T10:30:00"
+                total_amount: 274.00
+                discount_amount: 10.00
+                tax_amount: 14.00
+                payment_method: "cash"
+                status: "paid"
+                receipt_number: "RCP-20250115-A7X9K2"
+                created_at: "2025-01-15T10:30:00"
+                updated_at: "2025-01-15T10:30:00"
+                items:
+                  - bill_item_id: 1
+                    product_id: 1
+                    quantity: 2
+                    unit_price: 100.00
+                    discount: 0.00
+                    tax_amount: 10.00
+                    subtotal: 210.00
+                    product:
+                      product_id: 1
+                      name: "Full Cream Milk"
+                      category_id: 1
+                      unit: "Liter"
+                      cost_price: 60.00
+                      price: 100.00
+                      stock_quantity: 48
+                transactions:
+                  - transaction_id: 1
+                    bill_id: 42
+                    amount: 274.00
+                    payment_mode: "cash"
+                    reference_no: null
+                    created_at: "2025-01-15T10:30:00"
+        404:
+          description: "Sale not found"
+          content:
+            application/json:
+              example:
+                detail: "Sale not found"
+
+  /api/sales/daily/summary:
+    get:
+      summary: "Get Daily Sales Summary"
+      description: |
+        Get sales summary for a specific day.
+        
+        Returns:
+        - Total sales count
+        - Total revenue (sales + tax - discount)
+        - Breakdown by payment method
+        - Total tax and discounts
+      tags:
+        - Sales
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: "Date to get summary for (ISO format: YYYY-MM-DD)"
+          example: "2025-01-15"
+      responses:
+        200:
+          description: "Daily sales summary"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailySummaryResponse"
+              example:
+                date: "2025-01-15"
+                total_sales: 2500.00
+                total_discount: 50.00
+                total_tax: 125.00
+                total_revenue: 2575.00
+                transaction_count: 25
+                payment_breakdown:
+                  cash: 1200.00
+                  card: 800.00
+                  upi: 500.00
+                  credit: 0.00
+        400:
+          description: "Invalid date format"
+          content:
+            application/json:
+              example:
+                detail: "Invalid date format. Use YYYY-MM-DD"
+
+  /api/sales/{bill_id}/reverse:
+    post:
+      summary: "Reverse/Undo a Sale"
+      description: |
+        Reverse/undo a sale.
+        
+        **What happens when reversed:**
+        - Stock is restored for all items
+        - Credit is restored to customer (if payment was 'credit')
+        - Sale is marked as 'cancelled'
+        - Cannot reverse an already cancelled sale
+        
+        **Authorization:** Only authorized users (admin/manager) can reverse sales
+      tags:
+        - Sales
+      parameters:
+        - name: bill_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: "Sale/Bill ID to reverse"
+          example: 42
+      responses:
+        200:
+          description: "Sale reversed successfully"
+          content:
+            application/json:
+              example:
+                message: "Sale reversed successfully"
+                bill_id: 42
+        400:
+          description: |
+            Cannot reverse sale.
+            Possible reasons:
+            - Sale not found
+            - Sale is already cancelled
+            - Failed to restore stock/credit
+          content:
+            application/json:
+              example:
+                detail: "Sale is already cancelled"
+        404:
+          description: "Sale not found"
+          content:
+            application/json:
+              example:
+                detail: "Sale not found"
+
+  # ============ HEALTH CHECK ============
+  /api/sales/health/check:
+    get:
+      summary: "Health Check"
+      description: "Check if the sales service is running and responding."
+      tags:
+        - Health
+      responses:
+        200:
+          description: "Service is healthy"
+          content:
+            application/json:
+              example:
+                service: "sales"
+                status: "ok"
+
+  /health:
+    get:
+      summary: "API Health Check"
+      description: "General API health check endpoint."
+      tags:
+        - Health
+      responses:
+        200:
+          description: "API is healthy"
+          content:
+            application/json:
+              example:
+                status: "ok"
+
+# =========================
+# COMPONENTS / SCHEMAS
+# =========================
+components:
+  schemas:
+
+    # ============ Authentication ============
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: "User email address"
+          example: "admin@example.com"
+        password:
+          type: string
+          format: password
+          description: "User password"
+          example: "admin123"
+
+    LoginResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Login successful"
+        user:
+          type: object
+          properties:
+            id:
+              type: integer
+              example: 1
+            name:
+              type: string
+              example: "Admin"
+            email:
+              type: string
+              format: email
+              example: "admin@example.com"
+            role:
+              type: string
+              example: "admin"
+            designation:
+              type: string
+              nullable: true
+              example: null
+
+    # ============ Products ============
+    ProductSearchResponse:
+      type: object
+      properties:
+        product_id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "Full Cream Milk"
+        price:
+          type: number
+          format: decimal
+          example: 100.00
+        stock_quantity:
+          type: integer
+          example: 50
+        cost_price:
+          type: number
+          format: decimal
+          nullable: true
+          example: 60.00
+
+    ProductResponse:
+      type: object
+      properties:
+        product_id:
+          type: integer
+        name:
+          type: string
+        category_id:
+          type: integer
+          nullable: true
+        unit:
+          type: string
+          nullable: true
+        cost_price:
+          type: number
+          format: decimal
+          nullable: true
+        price:
+          type: number
+          format: decimal
+        stock_quantity:
+          type: integer
+
+    # ============ Sale Items ============
+    SaleItemCreate:
+      type: object
+      required:
+        - product_id
+        - quantity
+        - unit_price
+        - subtotal
+      properties:
+        product_id:
+          type: integer
+          description: "Product ID"
+          example: 1
+        quantity:
+          type: integer
+          description: "Quantity to purchase"
+          example: 2
+        unit_price:
+          type: number
+          format: decimal
+          description: "Unit price of product"
+          example: 100.00
+        discount:
+          type: number
+          format: decimal
+          description: "Discount on this item"
+          default: 0.00
+          example: 0.00
+        tax_amount:
+          type: number
+          format: decimal
+          description: "Tax amount on this item"
+          default: 0.00
+          example: 10.00
+        subtotal:
+          type: number
+          format: decimal
+          description: "Item total (quantity × unit_price - discount + tax)"
+          example: 210.00
+
+    SaleItemResponse:
+      allOf:
+        - $ref: "#/components/schemas/SaleItemCreate"
+        - type: object
+          properties:
+            bill_item_id:
+              type: integer
+            product:
+              $ref: "#/components/schemas/ProductResponse"
+
+    # ============ Transactions ============
+    TransactionCreate:
+      type: object
+      required:
+        - amount
+        - payment_mode
+      properties:
+        amount:
+          type: number
+          format: decimal
+          description: "Transaction amount"
+          example: 274.00
+        payment_mode:
+          type: string
+          enum: ["cash", "credit", "upi"]
+          description: "Payment method"
+          example: "cash"
+        reference_no:
+          type: string
+          nullable: true
+          description: "Reference number (for UPI/cheque/transfer)"
+          example: null
+
+    TransactionResponse:
+      allOf:
+        - $ref: "#/components/schemas/TransactionCreate"
+        - type: object
+          properties:
+            transaction_id:
+              type: integer
+            bill_id:
+              type: integer
+            created_at:
+              type: string
+              format: date-time
+
+    # ============ Sales ============
+    SaleCreate:
+      type: object
+      required:
+        - payment_method
+        - items
+      properties:
+        customer_id:
+          type: integer
+          nullable: true
+          description: "Customer ID (null for walk-in customers)"
+          example: null
+        payment_method:
+          type: string
+          enum: ["cash", "card", "upi", "credit"]
+          description: "Payment method"
+          example: "cash"
+        discount_amount:
+          type: number
+          format: decimal
+          description: "Total discount for sale"
+          default: 0.00
+          example: 10.00
+        items:
+          type: array
+          minItems: 1
+          description: "List of items in sale"
+          items:
+            $ref: "#/components/schemas/SaleItemCreate"
+
+    SaleResponse:
+      type: object
+      properties:
+        bill_id:
+          type: integer
+          example: 42
+        customer_id:
+          type: integer
+          nullable: true
+          example: 5
+        user_id:
+          type: integer
+          nullable: true
+          example: 1
+        bill_date:
+          type: string
+          format: date-time
+          example: "2025-01-15T10:30:00"
+        total_amount:
+          type: number
+          format: decimal
+          example: 274.00
+        discount_amount:
+          type: number
+          format: decimal
+          example: 10.00
+        tax_amount:
+          type: number
+          format: decimal
+          example: 14.00
+        payment_method:
+          type: string
+          enum: ["cash", "card", "upi", "credit"]
+          example: "cash"
+        status:
+          type: string
+          enum: ["paid", "pending", "cancelled"]
+          example: "paid"
+        receipt_number:
+          type: string
+          description: "Unique receipt number generated for this sale"
+          example: "RCP-20250115-A7X9K2"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SaleItemResponse"
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionResponse"
+
+    SalesHistorySummary:
+      type: object
+      properties:
+        bill_id:
+          type: integer
+        receipt_number:
+          type: string
+        customer_id:
+          type: integer
+          nullable: true
+        customer_name:
+          type: string
+          description: "Customer name or 'Walk-in' if no customer"
+        bill_date:
+          type: string
+          format: date-time
+        total_amount:
+          type: number
+          format: decimal
+        discount_amount:
+          type: number
+          format: decimal
+        tax_amount:
+          type: number
+          format: decimal
+        payment_method:
+          type: string
+          enum: ["cash", "card", "upi", "credit"]
+        status:
+          type: string
+          enum: ["paid", "pending", "cancelled"]
+
+    DailySummaryResponse:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+          example: "2025-01-15"
+        total_sales:
+          type: number
+          format: decimal
+          description: "Total sales amount (before tax and discount)"
+          example: 2500.00
+        total_discount:
+          type: number
+          format: decimal
+          description: "Total discounts given"
+          example: 50.00
+        total_tax:
+          type: number
+          format: decimal
+          description: "Total tax collected"
+          example: 125.00
+        total_revenue:
+          type: number
+          format: decimal
+          description: "Total revenue (sales + tax - discount)"
+          example: 2575.00
+        transaction_count:
+          type: integer
+          description: "Number of transactions on this day"
+          example: 25
+        payment_breakdown:
+          type: object
+          description: "Breakdown of sales by payment method"
+          properties:
+            cash:
+              type: number
+              format: decimal
+            card:
+              type: number
+              format: decimal
+            upi:
+              type: number
+              format: decimal
+            credit:
+              type: number
+              format: decimal
+          example:
+            cash: 1200.00
+            card: 800.00
+            upi: 500.00
+            credit: 0.00
+

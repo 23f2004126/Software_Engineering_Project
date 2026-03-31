@@ -50,6 +50,10 @@ CREATE TABLE users (
     FOREIGN KEY (designation_id) REFERENCES designations(designation_id)
 );
 
+-- Insert default admin user
+INSERT INTO users (name, email, password, role_id) VALUES 
+('Admin', 'admin@example.com', '$2b$12$j7exrVAimZUHwjF0Z.KvA.Fo5uP8sxjelMv8K//wVz5LELKJ7NVMS', 1);
+
 -- =========================
 -- SHIFTS TABLE
 -- =========================
@@ -80,6 +84,7 @@ CREATE TABLE products (
     name VARCHAR(100) NOT NULL,
     category_id INT,
     unit VARCHAR(20),
+    cost_price DECIMAL(10,2),
     price DECIMAL(10,2),
     stock_quantity INT DEFAULT 0,
 
@@ -103,7 +108,7 @@ CREATE TABLE customers (
 );
 
 -- =========================
--- BILLS TABLE
+-- BILLS TABLE (Sales)
 -- =========================
 CREATE TABLE bills (
     bill_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -112,16 +117,22 @@ CREATE TABLE bills (
 
     bill_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     total_amount DECIMAL(10,2),
+    discount_amount DECIMAL(10,2) DEFAULT 0,
+    tax_amount DECIMAL(10,2) DEFAULT 0,
 
     payment_method ENUM('cash','card','upi','credit'),
     status ENUM('paid','pending','cancelled'),
+    receipt_number VARCHAR(50) UNIQUE NOT NULL,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
     FOREIGN KEY (user_id) REFERENCES users(user_id)
 );
 
 -- =========================
--- BILL ITEMS TABLE
+-- BILL ITEMS TABLE (Sale Items)
 -- =========================
 CREATE TABLE bill_items (
     bill_item_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -129,7 +140,9 @@ CREATE TABLE bill_items (
     product_id INT,
 
     quantity INT,
-    price DECIMAL(10,2),
+    unit_price DECIMAL(10,2),
+    discount DECIMAL(10,2) DEFAULT 0,
+    tax_amount DECIMAL(10,2) DEFAULT 0,
     subtotal DECIMAL(10,2),
 
     FOREIGN KEY (bill_id) REFERENCES bills(bill_id) ON DELETE CASCADE,
@@ -137,18 +150,19 @@ CREATE TABLE bill_items (
 );
 
 -- =========================
--- CREDIT TRANSACTIONS
+-- TRANSACTIONS TABLE (Payment Tracking)
 -- =========================
-CREATE TABLE credit_transactions (
+CREATE TABLE transactions (
     transaction_id INT AUTO_INCREMENT PRIMARY KEY,
-    customer_id INT,
+    bill_id INT NOT NULL,
 
     amount DECIMAL(10,2),
-    type ENUM('credit','payment'),
-    transaction_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-    note TEXT,
+    payment_mode ENUM('cash','credit','upi'),
+    reference_no VARCHAR(100),
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-    FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+    FOREIGN KEY (bill_id) REFERENCES bills(bill_id) ON DELETE CASCADE
 );
 
 -- =========================
