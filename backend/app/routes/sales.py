@@ -34,7 +34,7 @@ async def get_current_user(db: Session = Depends(get_db), user_id: int = Header(
             status_code=401,
             detail="User not found or unauthorized"
         )
-    
+
     return user_id
 
 
@@ -59,8 +59,17 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
     return product
 
 
+@router.get("/products/barcode/{barcode}", response_model=ProductSearchResponse)
+def get_product_by_barcode(barcode: str, db: Session = Depends(get_db)):
+    from app.services import inventory_service
+    product = inventory_service.get_product_by_barcode(db, barcode)
+    if not product:
+        raise HTTPException(status_code=404, detail=f"Product with barcode '{barcode}' not found")
+    return product
+
+
 # =========================
-# DAILY SUMMARY 
+# DAILY SUMMARY
 # =========================
 
 @router.get("/daily/summary", response_model=DailySummaryResponse)
@@ -72,7 +81,7 @@ def get_daily_summary(
         summary_date = date_type.fromisoformat(date)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
-    
+
     summary = sales_service.get_daily_summary(db, summary_date)
     return DailySummaryResponse(**summary)
 
@@ -87,39 +96,17 @@ def create_sale(
     db: Session = Depends(get_db),
     current_user_id: int = Depends(get_current_user)
 ):
-    """
-    Request body:
-    {
-        "customer_id": 1 (optional, null for walk-in),
-        "payment_method": "cash|card|upi|credit",
-        "discount_amount": 0.00,
-        "items": [
-            {
-                "product_id": 1,
-                "quantity": 2,
-                "unit_price": 99.99,
-                "discount": 0.00,
-                "tax_amount": 0.00,
-                "subtotal": 199.98
-            }
-        ]
-    }
-    """
     sale, error = sales_service.create_sale(db, sale_data, user_id=current_user_id)
-    
+
     if error:
         raise HTTPException(status_code=400, detail=error)
-    
-    # Refresh to get relationships loaded
+
     db.refresh(sale)
     return sale
 
 
 @router.get("/{bill_id}", response_model=SaleResponse)
 def get_sale_details(bill_id: int, db: Session = Depends(get_db)):
-    """
-    Get details of a single sale.
-    """
     sale = sales_service.get_sale_by_id(db, bill_id)
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
@@ -137,32 +124,21 @@ def get_sales_history(
     limit: int = Query(100, ge=1, le=1000),
     db: Session = Depends(get_db)
 ):
-    """
-    Query parameters:
-    - start_date: ISO format date (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)
-    - end_date: ISO format date
-    - payment_method: cash, card, upi, credit
-    - status: paid, pending, cancelled
-    - customer_id: specific customer
-    - skip: offset
-    - limit: limit
-    """
-    # Parse dates 
     start_dt = None
     end_dt = None
-    
+
     if start_date:
         try:
             start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
-        except:
+        except Exception:
             raise HTTPException(status_code=400, detail="Invalid start_date format")
-    
+
     if end_date:
         try:
             end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
-        except:
+        except Exception:
             raise HTTPException(status_code=400, detail="Invalid end_date format")
-    
+
     sales, total = sales_service.get_sales_history(
         db,
         start_date=start_dt,
@@ -173,8 +149,7 @@ def get_sales_history(
         skip=skip,
         limit=limit
     )
-    
-    # Convert to summary response
+
     response = []
     for sale in sales:
         customer_name = sale.customer.name if sale.customer else "Walk-in"
@@ -192,7 +167,7 @@ def get_sales_history(
                 status=sale.status
             )
         )
-    
+
     return response
 
 
@@ -203,16 +178,20 @@ def get_sales_history(
 @router.post("/{bill_id}/reverse")
 def reverse_sale(bill_id: int, db: Session = Depends(get_db)):
     success, error = sales_service.reverse_sale(db, bill_id)
-    
+
     if not success:
         raise HTTPException(status_code=400, detail=error)
-    
+
     return {
         "message": "Sale reversed successfully",
         "bill_id": bill_id
     }
 
+
+# =========================
 # HEALTH CHECK
+# =========================
+
 @router.get("/health/check", tags=["Health"])
 def sales_health_check():
     return {"service": "sales", "status": "ok"}

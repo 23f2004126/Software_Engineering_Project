@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, Integer, String, ForeignKey, DateTime, Date, 
+    Column, Integer, String, ForeignKey, DateTime, Date,
     DECIMAL, Enum, Text
 )
 from sqlalchemy.orm import relationship
@@ -18,15 +18,25 @@ class Product(Base):
     name = Column(String(100), nullable=False, index=True)
     category_id = Column(Integer, ForeignKey("categories.category_id"))
 
+    sku = Column(String(50), unique=True, nullable=True, index=True)
+    barcode = Column(String(100), unique=True, nullable=True, index=True)
+
     unit = Column(String(20))
     cost_price = Column(DECIMAL(10, 2))
     price = Column(DECIMAL(10, 2))
     stock_quantity = Column(Integer, default=0)
 
+    reorder_level = Column(Integer, default=10)
+    max_stock = Column(Integer, default=100)
+    expiry_date = Column(Date, nullable=True)
+    status = Column(String(20), default="active")
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     bill_items = relationship("SaleItem", back_populates="product")
+    stock_movements = relationship("StockMovement", back_populates="product", cascade="all, delete-orphan")
+    damage_loss_records = relationship("DamageLossRecord", back_populates="product", cascade="all, delete-orphan")
 
 
 # =========================
@@ -120,3 +130,6 @@ class Transaction(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     sale = relationship("Sale", back_populates="transactions")
+
+
+from app.models.inventory import StockMovement, DamageLossRecord  # noqa: E402, F401

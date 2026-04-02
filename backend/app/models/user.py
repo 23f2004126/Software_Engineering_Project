@@ -55,6 +55,7 @@ class User(Base):
 
     shifts = relationship("Shift", back_populates="user")
     bills = relationship("Sale", back_populates="user")
+    damage_loss_records = relationship("DamageLossRecord", back_populates="user")
 
 
 # =========================
@@ -76,9 +77,9 @@ class Shift(Base):
 
 
 # =========================
-# NOTE: Category, Product, Customer, Sale, SaleItem, Transaction models
-# are now defined in app/models/sale.py to avoid duplication
+# MILK SUBSCRIBERS
 # =========================
+class MilkSubscriber(Base):
     __tablename__ = "milk_subscribers"
 
     subscriber_id = Column(Integer, primary_key=True)

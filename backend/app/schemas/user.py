@@ -1,9 +1,10 @@
 from pydantic import BaseModel, EmailStr, constr
 
+
 class UserCreate(BaseModel):
     name: constr(min_length=1, max_length=100)
     email: EmailStr
-    password: constr(min_length=6, max_length=72)  # enforce minimal password length
+    password: constr(min_length=6, max_length=72)
     phone: constr(min_length=7, max_length=20) = None
     role: constr(max_length=20) = "user"  # default role
 

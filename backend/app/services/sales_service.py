@@ -19,12 +19,11 @@ def generate_receipt_number(db: Session) -> str:
     today = datetime.utcnow().strftime("%Y%m%d")
     random_suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
     receipt_number = f"RCP-{today}-{random_suffix}"
-    
-    # Ensure uniqueness
+
     while db.query(Sale).filter(Sale.receipt_number == receipt_number).first():
         random_suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
         receipt_number = f"RCP-{today}-{random_suffix}"
-    
+
     return receipt_number
 
 
@@ -32,12 +31,10 @@ def generate_receipt_number(db: Session) -> str:
 # TAX CALCULATION
 # =========================
 def calculate_tax(amount: Decimal) -> Decimal:
-    
     return (amount * TAX_RATE).quantize(Decimal("0.01"))
 
 
 def calculate_item_tax(unit_price: Decimal, quantity: int, discount: Decimal = Decimal("0")) -> Decimal:
-    
     subtotal = unit_price * Decimal(str(quantity))
     taxable_amount = subtotal - discount
     return (taxable_amount * TAX_RATE).quantize(Decimal("0.01"))
@@ -47,32 +44,29 @@ def calculate_item_tax(unit_price: Decimal, quantity: int, discount: Decimal = D
 # STOCK MANAGEMENT
 # =========================
 def decrement_stock(db: Session, product_id: int, quantity: int) -> bool:
-    
     product = db.query(Product).filter(Product.product_id == product_id).first()
     if not product:
         return False
-    
+
     if product.stock_quantity < quantity:
-        return False  # Insufficient stock
-    
+        return False
+
     product.stock_quantity -= quantity
     db.commit()
     return True
 
 
 def restore_stock(db: Session, product_id: int, quantity: int) -> bool:
-    
     product = db.query(Product).filter(Product.product_id == product_id).first()
     if not product:
         return False
-    
+
     product.stock_quantity += quantity
     db.commit()
     return True
 
 
 def check_stock_availability(db: Session, items: List[SaleItemCreate]) -> tuple[bool, Optional[str]]:
-    
     for item in items:
         product = db.query(Product).filter(Product.product_id == item.product_id).first()
         if not product:
@@ -86,36 +80,33 @@ def check_stock_availability(db: Session, items: List[SaleItemCreate]) -> tuple[
 # CREDIT MANAGEMENT
 # =========================
 def deduct_credit(db: Session, customer_id: int, amount: Decimal) -> bool:
-    
     customer = db.query(Customer).filter(Customer.customer_id == customer_id).first()
     if not customer:
         return False
-    
+
     if customer.credit_balance < amount:
-        return False  # Insufficient credit
-    
+        return False
+
     customer.credit_balance -= amount
     db.commit()
     return True
 
 
 def restore_credit(db: Session, customer_id: int, amount: Decimal) -> bool:
-    
     customer = db.query(Customer).filter(Customer.customer_id == customer_id).first()
     if not customer:
         return False
-    
+
     customer.credit_balance -= amount
     db.commit()
     return True
 
 
 def add_credit(db: Session, customer_id: int, amount: Decimal) -> bool:
-    
     customer = db.query(Customer).filter(Customer.customer_id == customer_id).first()
     if not customer:
         return False
-    
+
     customer.credit_balance += amount
     db.commit()
     return True
@@ -129,24 +120,20 @@ def create_sale(
     sale_data: SaleCreate,
     user_id: int
 ) -> tuple[Optional[Sale], Optional[str]]:
-    
-    # Validate stock availability
+
     is_available, error_msg = check_stock_availability(db, sale_data.items)
     if not is_available:
         return None, error_msg
-    
-    # Calculate totals
+
     total_amount = Decimal("0")
     total_tax = Decimal("0")
-    
-    # For validation, calculate subtotals
+
     for item in sale_data.items:
         item_subtotal = item.subtotal
         item_tax = calculate_item_tax(item.unit_price, item.quantity, item.discount)
         total_amount += item_subtotal
         total_tax += item_tax
-    
-    # Apply discount
+
     total_amount = (total_amount - sale_data.discount_amount).quantize(Decimal("0.01"))
     
     # Create sale
@@ -161,11 +148,10 @@ def create_sale(
         status="pending" if sale_data.payment_method == "credit" else "paid",
         receipt_number=generate_receipt_number(db)
     )
-    
+
     db.add(sale)
-    db.flush()  # Flush to get the bill_id
-    
-    # Add sale items
+    db.flush()
+
     for item in sale_data.items:
         sale_item = SaleItem(
             bill_id=sale.bill_id,
@@ -197,7 +183,7 @@ def create_sale(
         reference_no=None  # Can be set later if needed
     )
     db.add(transaction)
-    
+
     db.commit()
     return sale, None
 
@@ -210,7 +196,7 @@ def reverse_sale(db: Session, bill_id: int) -> tuple[bool, Optional[str]]:
     sale = db.query(Sale).filter(Sale.bill_id == bill_id).first()
     if not sale:
         return False, "Sale not found"
-    
+
     if sale.status == "cancelled":
         return False, "Sale is already cancelled"
     
@@ -229,7 +215,7 @@ def reverse_sale(db: Session, bill_id: int) -> tuple[bool, Optional[str]]:
     # Mark sale as cancelled
     sale.status = "cancelled"
     db.commit()
-    
+
     return True, None
 
 
@@ -237,7 +223,6 @@ def reverse_sale(db: Session, bill_id: int) -> tuple[bool, Optional[str]]:
 # SALE RETRIEVAL
 # =========================
 def get_sale_by_id(db: Session, bill_id: int) -> Optional[Sale]:
-    
     return db.query(Sale).filter(Sale.bill_id == bill_id).first()
 
 
@@ -252,7 +237,7 @@ def get_sales_history(
     limit: int = 100
 ) -> tuple[List[Sale], int]:
     query = db.query(Sale)
-    
+
     if start_date:
         query = query.filter(Sale.bill_date >= start_date)
     if end_date:
@@ -263,28 +248,28 @@ def get_sales_history(
         query = query.filter(Sale.status == status)
     if customer_id:
         query = query.filter(Sale.customer_id == customer_id)
-    
+
     total_count = query.count()
     sales = query.order_by(Sale.bill_date.desc()).offset(skip).limit(limit).all()
-    
+
     return sales, total_count
 
 
 def get_daily_summary(db: Session, summary_date: date) -> Dict:
     start = datetime.combine(summary_date, datetime.min.time())
     end = datetime.combine(summary_date, datetime.max.time())
-    
+
     sales = db.query(Sale).filter(
         Sale.bill_date >= start,
         Sale.bill_date <= end,
         Sale.status != "cancelled"
     ).all()
-    
+
     total_sales = Decimal("0")
     total_discount = Decimal("0")
     total_tax = Decimal("0")
     payment_breakdown = {}
-    
+
     for sale in sales:
         total_sales += sale.total_amount
         total_discount += sale.discount_amount
@@ -294,9 +279,9 @@ def get_daily_summary(db: Session, summary_date: date) -> Dict:
         if sale.payment_method not in payment_breakdown:
             payment_breakdown[sale.payment_method] = Decimal("0")
         payment_breakdown[sale.payment_method] += sale.total_amount
-    
+
     total_revenue = total_sales + total_tax - total_discount
-    
+
     return {
         "date": summary_date.isoformat(),
         "total_sales": total_sales,
@@ -312,12 +297,10 @@ def get_daily_summary(db: Session, summary_date: date) -> Dict:
 # PRODUCT SEARCH
 # =========================
 def search_products(db: Session, query: str) -> List[Product]:
-
     return db.query(Product).filter(
         Product.name.ilike(f"%{query}%")
     ).limit(10).all()
 
 
 def get_product_by_id(db: Session, product_id: int) -> Optional[Product]:
-    
     return db.query(Product).filter(Product.product_id == product_id).first()

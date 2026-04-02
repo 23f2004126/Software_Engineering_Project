@@ -18,7 +18,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     phone: str
-    role: str   # this is designation name coming from frontend
+    role: str
 
 
 class UserResponse(BaseModel):

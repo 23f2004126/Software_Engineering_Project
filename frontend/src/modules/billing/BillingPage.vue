@@ -7,7 +7,7 @@ import Button from '../../components/ui/Button.vue'
 import Input from '../../components/ui/Input.vue'
 import Modal from '../../components/ui/Modal.vue'
 import { formatCurrency } from '../../utils/currency.js'
-import { apiCall } from '../../utils/api.js'
+import { salesService } from '../../services/apiService.js'
 
 const router = useRouter()
 
@@ -65,8 +65,8 @@ const searchProducts = async (query) => {
 
   try {
     loading.value = true
-    const response = await apiCall(`/api/sales/products/search?q=${encodeURIComponent(query)}`, 'GET')
-    searchResults.value = response
+    const response = await salesService.searchProducts(query)
+    searchResults.value = response || []
   } catch (err) {
     console.error('Product search error:', err)
     searchResults.value = []
@@ -129,7 +129,7 @@ const generateBill = async () => {
     }
 
     // Create sale via API
-    const response = await apiCall('/api/sales', 'POST', saleData)
+    const response = await salesService.createSale(saleData)
     
     generatedBill.value = response
     showSuccessModal.value = true

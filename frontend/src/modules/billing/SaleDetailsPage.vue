@@ -6,7 +6,7 @@ import Card from '../../components/ui/Card.vue'
 import Button from '../../components/ui/Button.vue'
 import { formatCurrency } from '../../utils/currency.js'
 import { formatDate } from '../../utils/dateFormatter.js'
-import { apiCall } from '../../utils/api.js'
+import { salesService } from '../../services/apiService.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -26,7 +26,7 @@ const fetchBillDetails = async () => {
   try {
     loading.value = true
     error.value = ''
-    const response = await apiCall(`/api/sales/${billId}`, 'GET')
+    const response = await salesService.getSaleDetails(billId)
     bill.value = response
   } catch (err) {
     error.value = err.message || 'Failed to fetch bill details'
@@ -42,7 +42,7 @@ const reverseSale = async () => {
   }
 
   try {
-    await apiCall(`/api/sales/${billId}/reverse`, 'POST')
+    await salesService.reverseSale(billId)
     alert('Sale reversed successfully')
     router.push('/sales')
   } catch (err) {

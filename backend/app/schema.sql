@@ -83,15 +83,28 @@ CREATE TABLE products (
     product_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     category_id INT,
+    
+    -- Inventory tracking fields
+    sku VARCHAR(50) UNIQUE NULL,
+    barcode VARCHAR(100) UNIQUE NULL,
+    
     unit VARCHAR(20),
     cost_price DECIMAL(10,2),
     price DECIMAL(10,2),
     stock_quantity INT DEFAULT 0,
+    
+    -- Extended inventory fields
+    reorder_level INT DEFAULT 10,
+    max_stock INT DEFAULT 100,
+    expiry_date DATE NULL,
+    status VARCHAR(20) DEFAULT 'active',
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
-    FOREIGN KEY (category_id) REFERENCES categories(category_id)
+    FOREIGN KEY (category_id) REFERENCES categories(category_id),
+    KEY idx_sku (sku),
+    KEY idx_barcode (barcode)
 );
 
 -- =========================
@@ -209,17 +222,38 @@ CREATE TABLE purchase_orders (
 );
 
 -- =========================
--- LOSS LOGS
+-- STOCK MOVEMENTS TABLE
 -- =========================
-CREATE TABLE loss_logs (
-    loss_id INT AUTO_INCREMENT PRIMARY KEY,
+CREATE TABLE stock_movements (
+    movement_id INT AUTO_INCREMENT PRIMARY KEY,
     product_id INT,
-
-    quantity_lost INT,
+    
+    movement_type ENUM('in', 'out', 'adjustment', 'return') NOT NULL,
+    quantity INT NOT NULL,
     reason VARCHAR(255),
-    loss_date DATE,
 
-    FOREIGN KEY (product_id) REFERENCES products(product_id)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE
+);
+
+-- =========================
+-- DAMAGE/LOSS RECORDS TABLE
+-- =========================
+CREATE TABLE damage_loss_records (
+    record_id INT AUTO_INCREMENT PRIMARY KEY,
+    product_id INT NOT NULL,
+
+    quantity_lost INT NOT NULL,
+    loss_type ENUM('damaged', 'expired', 'theft', 'other') NOT NULL,
+    reason TEXT,
+    loss_value DECIMAL(10,2),
+    
+    reported_by INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE,
+    FOREIGN KEY (reported_by) REFERENCES users(user_id)
 );
 
 -- =========================
@@ -261,3 +295,6 @@ CREATE TABLE milk_daily_entries (
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_products_name ON products(name);
 CREATE INDEX idx_customers_phone ON customers(phone);
+CREATE INDEX idx_stock_movements_product ON stock_movements(product_id);
+CREATE INDEX idx_damage_loss_product ON damage_loss_records(product_id);
+CREATE INDEX idx_damage_loss_reporter ON damage_loss_records(reported_by);

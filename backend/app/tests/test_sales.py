@@ -19,10 +19,6 @@ from app.schemas.sale import SaleCreate, SaleItemCreate
 
 @pytest.fixture(scope="function")
 def test_db():
-    """
-    Create an in-memory SQLite database for testing.
-    Uses StaticPool to ensure the same connection is reused.
-    """
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -35,7 +31,7 @@ def test_db():
     # Create session
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     db = TestingSessionLocal()
-    
+
     yield db
     
     # Cleanup

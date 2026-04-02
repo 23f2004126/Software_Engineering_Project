@@ -8,7 +8,7 @@ import Input from '../../components/ui/Input.vue'
 import Table from '../../components/ui/Table.vue'
 import { formatCurrency } from '../../utils/currency.js'
 import { formatDate } from '../../utils/dateFormatter.js'
-import { apiCall } from '../../utils/api.js'
+import { salesService } from '../../services/apiService.js'
 
 const router = useRouter()
 
@@ -55,14 +55,12 @@ const fetchSalesHistory = async () => {
     loading.value = true
     error.value = ''
 
-    // Build query parameters
-    const params = new URLSearchParams()
-    if (filters.value.dateFrom) params.append('start_date', filters.value.dateFrom)
-    if (filters.value.dateTo) params.append('end_date', filters.value.dateTo)
-    if (filters.value.payment_method) params.append('payment_method', filters.value.payment_method)
-    if (filters.value.status) params.append('status', filters.value.status)
-
-    const response = await apiCall(`/api/sales?${params.toString()}`, 'GET')
+    const response = await salesService.getSalesHistory({
+      startDate: filters.value.dateFrom,
+      endDate: filters.value.dateTo,
+      paymentMethod: filters.value.payment_method,
+      status: filters.value.status
+    })
     sales.value = response || []
     currentPage.value = 1
   } catch (err) {

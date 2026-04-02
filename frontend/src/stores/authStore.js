@@ -14,14 +14,19 @@ export const useAuthStore = defineStore('auth', () => {
   const isEmployee = computed(() => role.value === 'employee')
 
   // Actions
-  const login = (userData, userRole) => {
-    user.value = userData
+  const login = (userData, userRole, userId = null) => {
+    // Ensure userData has user_id field
+    const userWithId = {
+      ...userData,
+      user_id: userId || userData.user_id || null
+    }
+    user.value = userWithId
     role.value = userRole // 'owner' or 'employee'
     isAuthenticated.value = true
     
     // Persist to localStorage
     localStorage.setItem('sonik_auth', JSON.stringify({
-      user: userData,
+      user: userWithId,
       role: userRole,
       isAuthenticated: true,
     }))

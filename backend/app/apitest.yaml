@@ -19,6 +19,8 @@ tags:
     description: Sales creation, history, and management
   - name: Products
     description: Product search and details
+  - name: Inventory
+    description: Inventory management, stock tracking, and damage/loss reporting
   - name: Health
     description: Service health checks
 
@@ -496,6 +498,306 @@ paths:
                 detail: "Sale not found"
 
   # ============ HEALTH CHECK ============
+  /api/inventory:
+    post:
+      summary: "Create Product"
+      description: "Create a new product with all details. Validates SKU uniqueness, barcode uniqueness, and cost < price."
+      tags:
+        - Inventory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductCreate"
+            example:
+              name: "Amul Butter 100g"
+              sku: "AMU-BTR-100"
+              barcode: "8901234567890"
+              category_id: 1
+              cost: 40.00
+              price: 58.00
+              stock: 50
+              reorder_level: 10
+              max_stock: 200
+              unit: "pcs"
+              expiry_date: "2026-12-31"
+              description: "Quality butter product"
+      responses:
+        201:
+          description: "Product created successfully"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductResponse"
+        400:
+          description: "Validation error"
+        401:
+          description: "Unauthorized"
+
+    get:
+      summary: "List Products"
+      description: "Get all products with pagination, filtering, and search capabilities."
+      tags:
+        - Inventory
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: "Search by product name"
+        - name: category_id
+          in: query
+          schema:
+            type: integer
+          description: "Filter by category ID"
+        - name: stock_status
+          in: query
+          schema:
+            type: string
+            enum: ["low", "ok", "out"]
+          description: "Filter by stock status"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        200:
+          description: "List of products"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductResponse"
+
+  /api/inventory/{product_id}:
+    get:
+      summary: "Get Product Details"
+      tags:
+        - Inventory
+      parameters:
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: "Product details"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductDetailResponse"
+        404:
+          description: "Product not found"
+
+    put:
+      summary: "Update Product"
+      tags:
+        - Inventory
+      parameters:
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductUpdate"
+      responses:
+        200:
+          description: "Product updated"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductResponse"
+        404:
+          description: "Product not found"
+
+    delete:
+      summary: "Delete Product"
+      tags:
+        - Inventory
+      parameters:
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: "Product deleted"
+        404:
+          description: "Product not found"
+
+  /api/inventory/barcode/{barcode}:
+    get:
+      summary: "Lookup by Barcode"
+      tags:
+        - Inventory
+      parameters:
+        - name: barcode
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: "Product found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductResponse"
+        404:
+          description: "Product not found"
+
+  /api/inventory/stock-adjustment:
+    post:
+      summary: "Adjust Stock"
+      tags:
+        - Inventory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StockAdjustmentRequest"
+      responses:
+        200:
+          description: "Stock adjusted"
+
+  /api/inventory/{product_id}/movements:
+    get:
+      summary: "Stock Movements"
+      tags:
+        - Inventory
+      parameters:
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        200:
+          description: "Movement history"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StockMovementResponse"
+
+  /api/inventory/alerts/low-stock:
+    get:
+      summary: "Low Stock Alerts"
+      tags:
+        - Inventory
+      responses:
+        200:
+          description: "Low stock products"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LowStockAlert"
+
+  /api/inventory/alerts/expiring-soon:
+    get:
+      summary: "Expiring Soon"
+      tags:
+        - Inventory
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 7
+      responses:
+        200:
+          description: "Expiring products"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExpiryAlert"
+
+  /api/inventory/value/total:
+    get:
+      summary: "Total Inventory Value"
+      tags:
+        - Inventory
+      responses:
+        200:
+          description: "Inventory value"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryValueResponse"
+
+  /api/inventory/damage-loss:
+    post:
+      summary: "Log Damage/Loss"
+      tags:
+        - Inventory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DamageLossCreate"
+      responses:
+        201:
+          description: "Damage/loss recorded"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DamageLossResponse"
+
+  /api/inventory/damage-loss/report:
+    get:
+      summary: "Damage/Loss Report"
+      tags:
+        - Inventory
+      parameters:
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: reason
+          in: query
+          schema:
+            type: string
+      responses:
+        200:
+          description: "Damage/loss report"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DamageLossReport"
+
   /api/sales/health/check:
     get:
       summary: "Health Check"
@@ -839,6 +1141,405 @@ components:
           format: decimal
           description: "Total sales amount (before tax and discount)"
           example: 2500.00
+        total_discount:
+          type: number
+          format: decimal
+          example: 100.00
+        total_tax:
+          type: number
+          format: decimal
+          example: 450.00
+        net_amount:
+          type: number
+          format: decimal
+          example: 2850.00
+        payment_breakdown:
+          type: object
+          properties:
+            cash:
+              type: number
+              format: decimal
+            card:
+              type: number
+              format: decimal
+            upi:
+              type: number
+              format: decimal
+            credit:
+              type: number
+              format: decimal
+
+    # ============ Inventory ============
+    ProductCreate:
+      type: object
+      required:
+        - name
+        - sku
+        - barcode
+        - cost_price
+        - selling_price
+        - stock_quantity
+      properties:
+        name:
+          type: string
+          example: "Full Cream Milk"
+        sku:
+          type: string
+          description: "Unique stock keeping unit"
+          example: "SKU-001"
+        barcode:
+          type: string
+          description: "Product barcode"
+          example: "9876543210123"
+        cost_price:
+          type: number
+          format: decimal
+          example: 80.00
+        selling_price:
+          type: number
+          format: decimal
+          example: 100.00
+        stock_quantity:
+          type: integer
+          example: 50
+        category_id:
+          type: integer
+          nullable: true
+        supplier_id:
+          type: integer
+          nullable: true
+        expiry_date:
+          type: string
+          format: date
+          nullable: true
+        reorder_level:
+          type: integer
+          default: 10
+
+    ProductUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        sku:
+          type: string
+        barcode:
+          type: string
+        cost_price:
+          type: number
+          format: decimal
+        selling_price:
+          type: number
+          format: decimal
+        category_id:
+          type: integer
+          nullable: true
+        supplier_id:
+          type: integer
+          nullable: true
+        expiry_date:
+          type: string
+          format: date
+          nullable: true
+        reorder_level:
+          type: integer
+        is_discontinued:
+          type: boolean
+          default: false
+
+    ProductResponse:
+      type: object
+      properties:
+        product_id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "Full Cream Milk"
+        sku:
+          type: string
+          example: "SKU-001"
+        barcode:
+          type: string
+          example: "9876543210123"
+        cost_price:
+          type: number
+          format: decimal
+          example: 80.00
+        selling_price:
+          type: number
+          format: decimal
+          example: 100.00
+        profit_margin:
+          type: number
+          format: decimal
+          example: 25.00
+        stock_quantity:
+          type: integer
+          example: 50
+        category_id:
+          type: integer
+          nullable: true
+        supplier_id:
+          type: integer
+          nullable: true
+        expiry_date:
+          type: string
+          format: date
+          nullable: true
+        reorder_level:
+          type: integer
+          example: 10
+        is_discontinued:
+          type: boolean
+          example: false
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ProductDetailResponse:
+      type: object
+      properties:
+        product_id:
+          type: integer
+        name:
+          type: string
+        sku:
+          type: string
+        barcode:
+          type: string
+        cost_price:
+          type: number
+          format: decimal
+        selling_price:
+          type: number
+          format: decimal
+        stock_quantity:
+          type: integer
+        category_id:
+          type: integer
+          nullable: true
+        supplier_id:
+          type: integer
+          nullable: true
+        expiry_date:
+          type: string
+          format: date
+          nullable: true
+        reorder_level:
+          type: integer
+        is_discontinued:
+          type: boolean
+        total_value:
+          type: number
+          format: decimal
+          description: "Stock value (cost_price × stock_quantity)"
+        stock_movements:
+          type: array
+          items:
+            $ref: "#/components/schemas/StockMovementResponse"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    StockMovementResponse:
+      type: object
+      properties:
+        movement_id:
+          type: integer
+        product_id:
+          type: integer
+        quantity_change:
+          type: integer
+          description: "Positive for inbound, negative for outbound"
+        movement_type:
+          type: string
+          enum: ["purchase", "sale", "adjustment", "damage", "loss"]
+        reference_id:
+          type: integer
+          nullable: true
+          description: "Sale bill ID or adjustment ID"
+        created_by:
+          type: integer
+          description: "User ID who made the movement"
+        notes:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    StockAdjustmentRequest:
+      type: object
+      required:
+        - product_id
+        - quantity_change
+        - reason
+      properties:
+        product_id:
+          type: integer
+        quantity_change:
+          type: integer
+          description: "Positive to add, negative to remove"
+        reason:
+          type: string
+          enum: ["recount", "damage", "theft", "adjustment", "other"]
+        notes:
+          type: string
+          nullable: true
+
+    DamageLossCreate:
+      type: object
+      required:
+        - product_id
+        - quantity
+        - reason
+      properties:
+        product_id:
+          type: integer
+        quantity:
+          type: integer
+          minimum: 1
+        reason:
+          type: string
+          enum: ["expired", "damaged", "theft", "spillage", "breakage", "other"]
+        notes:
+          type: string
+          nullable: true
+        date_recorded:
+          type: string
+          format: date-time
+          nullable: true
+
+    DamageLossResponse:
+      type: object
+      properties:
+        loss_id:
+          type: integer
+        product_id:
+          type: integer
+        product_name:
+          type: string
+        quantity:
+          type: integer
+        cost_price:
+          type: number
+          format: decimal
+        total_cost:
+          type: number
+          format: decimal
+          description: "quantity × cost_price"
+        reason:
+          type: string
+        notes:
+          type: string
+          nullable: true
+        created_by:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    InventoryValueResponse:
+      type: object
+      properties:
+        total_value:
+          type: number
+          format: decimal
+          description: "Total cost of all inventory"
+        total_items:
+          type: integer
+          description: "Total number of items in stock"
+        product_count:
+          type: integer
+          description: "Number of unique products"
+        low_stock_count:
+          type: integer
+          description: "Products below reorder level"
+        value_by_category:
+          type: object
+          additionalProperties:
+            type: number
+            format: decimal
+
+    DamageLossReport:
+      type: object
+      properties:
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        total_losses:
+          type: integer
+          description: "Total items lost/damaged"
+        total_cost:
+          type: number
+          format: decimal
+          description: "Total cost of losses"
+        loss_count:
+          type: integer
+          description: "Number of loss records"
+        by_reason:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              count:
+                type: integer
+              cost:
+                type: number
+                format: decimal
+        details:
+          type: array
+          items:
+            $ref: "#/components/schemas/DamageLossResponse"
+
+    LowStockAlert:
+      type: object
+      properties:
+        product_id:
+          type: integer
+        name:
+          type: string
+        sku:
+          type: string
+        barcode:
+          type: string
+        current_stock:
+          type: integer
+        reorder_level:
+          type: integer
+        supplier_id:
+          type: integer
+          nullable: true
+
+    ExpiryAlert:
+      type: object
+      properties:
+        product_id:
+          type: integer
+        name:
+          type: string
+        sku:
+          type: string
+        barcode:
+          type: string
+        expiry_date:
+          type: string
+          format: date
+        stock_quantity:
+          type: integer
+        days_until_expiry:
+          type: integer
+          description: "Number of days until product expires"
         total_discount:
           type: number
           format: decimal
