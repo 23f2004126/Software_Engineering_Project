@@ -1,19 +1,31 @@
-from pydantic import BaseModel, EmailStr, constr
+from pydantic import BaseModel, EmailStr
+from typing import Optional
 
+
+# =========================
+# USER SCHEMAS
+# =========================
 
 class UserCreate(BaseModel):
-    name: constr(min_length=1, max_length=100)
-    email: EmailStr
-    password: constr(min_length=6, max_length=72)
-    phone: constr(min_length=7, max_length=20) = None
-    role: constr(max_length=20) = "user"  # default role
-
-class UserResponse(BaseModel):
-    user_id: int
     name: str
     email: EmailStr
-    phone: str | None
-    role: str
+    password: str
+    phone: Optional[str] = None
+    role: str = "employee"           # maps to Designation.designation_name in the route
+
+
+class UserResponse(BaseModel):
+    user_id: int                     # model PK: user_id (not id)
+    name: str
+    email: EmailStr
+    phone: Optional[str] = None
+    role: Optional[str] = None       # resolved from Role.role_name
+    designation: Optional[str] = None  # resolved from Designation.designation_name
 
     class Config:
-        orm_mode = True  # allows returning SQLAlchemy models directly
+        from_attributes = True       # Pydantic v2
+
+
+class RegisterResponse(BaseModel):
+    message: str
+    user: UserResponse

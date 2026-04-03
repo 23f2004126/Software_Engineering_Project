@@ -8,30 +8,36 @@ from enum import Enum
 # =========================
 # ENUMS
 # =========================
+
 class PaymentMethodEnum(str, Enum):
     CASH = "cash"
-    CARD = "card"
     UPI = "upi"
     CREDIT = "credit"
-
+    
 
 class SaleStatusEnum(str, Enum):
-    PAID = "paid"
+    COMPLETED = "completed"
     PENDING = "pending"
+    REVERSED = "reversed"
     CANCELLED = "cancelled"
 
 
 # =========================
-# PRODUCT SCHEMAS
+# PRODUCT SCHEMAS (used inside sale responses)
 # =========================
-class ProductResponse(BaseModel):
+
+class ProductSearchResponse(BaseModel):
+    """Used by /api/sales/products/search and barcode lookup."""
     product_id: int
     name: str
-    category_id: Optional[int] = None
+    sku: Optional[str] = None
+    barcode: Optional[str] = None
     unit: Optional[str] = None
-    cost_price: Optional[Decimal] = None
-    price: Decimal
-    stock_quantity: int
+    price: Optional[Decimal] = None
+    cost: Optional[Decimal] = None      
+    stock: int = 0                       
+    category_id: Optional[int] = None
+    status: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -40,24 +46,25 @@ class ProductResponse(BaseModel):
 # =========================
 # SALE ITEM SCHEMAS
 # =========================
+
 class SaleItemCreate(BaseModel):
     product_id: int
     quantity: int
     unit_price: Decimal
     discount: Decimal = Decimal("0")
     tax_amount: Decimal = Decimal("0")
-    subtotal: Decimal
+    total: Decimal                   
 
 
 class SaleItemResponse(BaseModel):
-    bill_item_id: int
+    bill_item_id: int                    
+    bill_id: int
     product_id: int
     quantity: int
     unit_price: Decimal
     discount: Decimal
     tax_amount: Decimal
-    subtotal: Decimal
-    product: Optional[ProductResponse] = None
+    total: Decimal                      
 
     class Config:
         from_attributes = True
@@ -66,9 +73,10 @@ class SaleItemResponse(BaseModel):
 # =========================
 # TRANSACTION SCHEMAS
 # =========================
+
 class TransactionCreate(BaseModel):
     amount: Decimal
-    payment_mode: str  # 'cash', 'credit', 'upi'
+    payment_mode: str                    # 'cash', 'upi', 'credit'
     reference_no: Optional[str] = None
 
 
@@ -87,24 +95,30 @@ class TransactionResponse(BaseModel):
 # =========================
 # SALE SCHEMAS
 # =========================
+
 class SaleCreate(BaseModel):
-    customer_id: Optional[int] = None  # None for walk-in customers
-    payment_method: PaymentMethodEnum  # 'cash', 'card', 'upi', 'credit'
+    customer_id: Optional[int] = None       # None = walk-in customer
+    payment_method: PaymentMethodEnum
     items: List[SaleItemCreate]
     discount_amount: Decimal = Decimal("0")
 
+    # Set by the route before passing to the service — not sent by client
+    receipt_number: Optional[str] = None
+    tax_amount: Optional[Decimal] = None
+    total_amount: Optional[Decimal] = None
+
 
 class SaleResponse(BaseModel):
-    bill_id: int
+    bill_id: int                             # model PK: bill_id
     customer_id: Optional[int] = None
     user_id: Optional[int] = None
-    bill_date: datetime
+    receipt_number: str
+    bill_date: datetime                    
     total_amount: Decimal
     discount_amount: Decimal
     tax_amount: Decimal
     payment_method: PaymentMethodEnum
     status: SaleStatusEnum
-    receipt_number: str
     created_at: datetime
     updated_at: datetime
     items: List[SaleItemResponse] = []
@@ -115,21 +129,15 @@ class SaleResponse(BaseModel):
 
 
 # =========================
-# SALES HISTORY (LIST) SCHEMAS
+# SALES HISTORY SCHEMAS
 # =========================
-class SalesHistoryFilter(BaseModel):
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
-    payment_method: Optional[str] = None
-    status: Optional[str] = None
-    customer_id: Optional[int] = None
-
 
 class SalesHistorySummary(BaseModel):
+    """Lightweight row used in the sales history list."""
     bill_id: int
     receipt_number: str
     customer_id: Optional[int] = None
-    customer_name: Optional[str] = None
+    customer_name: Optional[str] = None     # Resolved by the route from Sale.customer
     bill_date: datetime
     total_amount: Decimal
     discount_amount: Decimal
@@ -141,6 +149,7 @@ class SalesHistorySummary(BaseModel):
 # =========================
 # DAILY SUMMARY SCHEMA
 # =========================
+
 class DailySummaryResponse(BaseModel):
     date: str
     total_sales: Decimal
@@ -148,18 +157,4 @@ class DailySummaryResponse(BaseModel):
     total_tax: Decimal
     total_revenue: Decimal
     transaction_count: int
-    payment_breakdown: dict  # e.g., {'cash': 1000, 'card': 500}
-
-
-# =========================
-# PRODUCT SEARCH RESPONSE
-# =========================
-class ProductSearchResponse(BaseModel):
-    product_id: int
-    name: str
-    price: Decimal
-    stock_quantity: int
-    cost_price: Optional[Decimal] = None
-
-    class Config:
-        from_attributes = True
+    payment_breakdown: dict              # e.g., {"cash": 1000.0, "upi": 500.0, "credit": 200.0}

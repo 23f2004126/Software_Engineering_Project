@@ -4,7 +4,7 @@ from datetime import datetime, date as date_type, timedelta
 from typing import List, Optional
 
 from app.database import get_db
-from app.routes.sales import get_current_user
+from app.routes.deps import get_current_user
 from app.schemas.inventory import (
     ProductCreate, ProductUpdate, ProductResponse, ProductDetailResponse,
     StockMovementResponse, StockAdjustmentRequest,
@@ -26,7 +26,7 @@ router = APIRouter(prefix="/api/inventory", tags=["Inventory"])
 def create_product(
     product_data: ProductCreate,
     db: Session = Depends(get_db),
-    current_user_id: int = Depends(get_current_user)
+    current_user=Depends(get_current_user)
 ):
     product, error = inventory_service.create_product(db, product_data)
 
@@ -34,8 +34,8 @@ def create_product(
         raise HTTPException(status_code=400, detail=error)
 
     response = ProductResponse(**product.__dict__)
-    response.profit_margin = inventory_service.calculate_profit_margin(product.price, product.cost_price)
-    response.inventory_value = inventory_service.calculate_inventory_value(db)
+    response.profit_margin = inventory_service.calculate_profit_margin(product.price, product.cost)
+    response.inventory_value = product.cost * product.stock
 
     return response
 
@@ -77,7 +77,9 @@ def get_product_detail(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    movements, _ = inventory_service.get_stock_movements_for_product(db, product_id, skip=0, limit=100)
+    movements, _ = inventory_service.get_stock_movements_for_product(
+        db, product_id, skip=0, limit=100
+    )
     movements_response = [StockMovementResponse(**m.__dict__) for m in movements]
 
     low_stock = product.stock < product.reorder_level
@@ -103,7 +105,7 @@ def update_product(
     product_id: int,
     product_data: ProductUpdate,
     db: Session = Depends(get_db),
-    current_user_id: int = Depends(get_current_user)
+    current_user=Depends(get_current_user)
 ):
     product, error = inventory_service.update_product(db, product_id, product_data)
 
@@ -121,7 +123,7 @@ def update_product(
 def delete_product(
     product_id: int,
     db: Session = Depends(get_db),
-    current_user_id: int = Depends(get_current_user)
+    current_user=Depends(get_current_user)
 ):
     success, error = inventory_service.delete_product(db, product_id)
 
@@ -132,14 +134,14 @@ def delete_product(
 
 
 # =========================
-# STOCK MANAGEMENT ENDPOINTS
+# STOCK MANAGEMENT
 # =========================
 
 @router.post("/stock-adjustment", response_model=dict)
 def adjust_stock(
     adjustment: StockAdjustmentRequest,
     db: Session = Depends(get_db),
-    current_user_id: int = Depends(get_current_user)
+    current_user=Depends(get_current_user)
 ):
     success, error = inventory_service.adjust_stock(
         db,
@@ -147,7 +149,7 @@ def adjust_stock(
         quantity_change=adjustment.quantity,
         movement_type="adjustment",
         notes=adjustment.reason,
-        created_by=current_user_id
+        created_by=current_user.user_id
     )
 
     if not success:
@@ -189,8 +191,7 @@ def get_stock_movements(
 
 @router.get("/alerts/low-stock", response_model=List[LowStockAlert])
 def get_low_stock_products(db: Session = Depends(get_db)):
-    low_stock = inventory_service.get_low_stock_products(db)
-    return low_stock
+    return inventory_service.get_low_stock_products(db)
 
 
 @router.get("/alerts/expiring-soon", response_model=List[ExpiryAlert])
@@ -198,14 +199,36 @@ def get_expiring_soon(
     days: int = Query(30, ge=1, le=365),
     db: Session = Depends(get_db)
 ):
-    expiring = inventory_service.get_expiring_soon_products(db, days=days)
-    return expiring
+    return inventory_service.get_expiring_soon_products(db, days=days)
 
+
+# =========================
+# BARCODE LOOKUP
+# =========================
+
+@router.get("/barcode/{barcode}", response_model=ProductResponse)
+def get_product_by_barcode(barcode: str, db: Session = Depends(get_db)):
+    product = inventory_service.get_product_by_barcode(db, barcode)
+    if not product:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Product with barcode '{barcode}' not found"
+        )
+
+    response = ProductResponse(**product.__dict__)
+    response.profit_margin = inventory_service.calculate_profit_margin(product.price, product.cost)
+    response.inventory_value = product.cost * product.stock
+
+    return response
+
+
+# =========================
+# INVENTORY VALUE
+# =========================
 
 @router.get("/value/total", response_model=InventoryValueResponse)
 def get_total_inventory_value(db: Session = Depends(get_db)):
     total_value = inventory_service.calculate_inventory_value(db)
-
     products_count = db.query(Product).filter(Product.status == "active").count()
     avg_value = total_value / products_count if products_count > 0 else 0
 
@@ -217,19 +240,19 @@ def get_total_inventory_value(db: Session = Depends(get_db)):
 
 
 # =========================
-# DAMAGE & LOSS ENDPOINTS
+# DAMAGE & LOSS
 # =========================
 
 @router.post("/damage-loss", response_model=DamageLossResponse)
 def log_damage_loss(
     damage_data: DamageLossCreate,
     db: Session = Depends(get_db),
-    current_user_id: int = Depends(get_current_user)
+    current_user=Depends(get_current_user)
 ):
     record, error = inventory_service.log_damage_loss(
         db,
         damage_data=damage_data,
-        reported_by=current_user_id
+        reported_by=current_user.user_id
     )
 
     if error:
@@ -252,13 +275,13 @@ def get_damage_loss_report(
         try:
             start_dt = datetime.fromisoformat(start_date)
         except Exception:
-            raise HTTPException(status_code=400, detail="Invalid start_date format")
+            raise HTTPException(status_code=400, detail="Invalid start_date format. Use ISO format.")
 
     if end_date:
         try:
             end_dt = datetime.fromisoformat(end_date)
         except Exception:
-            raise HTTPException(status_code=400, detail="Invalid end_date format")
+            raise HTTPException(status_code=400, detail="Invalid end_date format. Use ISO format.")
 
     report = inventory_service.get_damage_loss_report(
         db,
@@ -271,7 +294,7 @@ def get_damage_loss_report(
 
 
 # =========================
-# STATISTICS ENDPOINT
+# STATISTICS
 # =========================
 
 @router.get("/stats/overview", response_model=dict)

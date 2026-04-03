@@ -1,241 +1,115 @@
+"""
+All service methods called by sales.py routes.
+"""
+
 from sqlalchemy.orm import Session
-from datetime import datetime, date
-from decimal import Decimal
-from typing import List, Dict, Optional
-import random
-import string
+from sqlalchemy import func
+from datetime import date
+from typing import Optional, Tuple, List
 
-from app.models.sale import Sale, SaleItem, Transaction, Product, Customer
-from app.schemas.sale import SaleCreate, SaleItemCreate, TransactionCreate
-
-# Tax rate (5%)
-TAX_RATE = Decimal("0.05")
+from app.models.sale import Sale, SaleItem, Product
+from app.models.user import Customer
 
 
 # =========================
-# RECEIPT NUMBER GENERATION
+# PRODUCT SEARCH (used by POS)
 # =========================
-def generate_receipt_number(db: Session) -> str:
-    today = datetime.utcnow().strftime("%Y%m%d")
-    random_suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-    receipt_number = f"RCP-{today}-{random_suffix}"
 
-    while db.query(Sale).filter(Sale.receipt_number == receipt_number).first():
-        random_suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-        receipt_number = f"RCP-{today}-{random_suffix}"
-
-    return receipt_number
-
-
-# =========================
-# TAX CALCULATION
-# =========================
-def calculate_tax(amount: Decimal) -> Decimal:
-    return (amount * TAX_RATE).quantize(Decimal("0.01"))
+def search_products(db: Session, query: str) -> List[Product]:
+    return db.query(Product).filter(
+        Product.status == "active",
+        (
+            Product.name.ilike(f"%{query}%") |
+            Product.sku.ilike(f"%{query}%") |
+            Product.barcode.ilike(f"%{query}%")
+        )
+    ).limit(20).all()
 
 
-def calculate_item_tax(unit_price: Decimal, quantity: int, discount: Decimal = Decimal("0")) -> Decimal:
-    subtotal = unit_price * Decimal(str(quantity))
-    taxable_amount = subtotal - discount
-    return (taxable_amount * TAX_RATE).quantize(Decimal("0.01"))
+def get_product_by_id(db: Session, product_id: int) -> Optional[Product]:
+    return db.query(Product).filter(
+        Product.product_id == product_id,
+        Product.status == "active"
+    ).first()
 
 
 # =========================
-# STOCK MANAGEMENT
+# CREATE SALE
 # =========================
-def decrement_stock(db: Session, product_id: int, quantity: int) -> bool:
-    product = db.query(Product).filter(Product.product_id == product_id).first()
-    if not product:
-        return False
 
-    if product.stock_quantity < quantity:
-        return False
-
-    product.stock_quantity -= quantity
-    db.commit()
-    return True
-
-
-def restore_stock(db: Session, product_id: int, quantity: int) -> bool:
-    product = db.query(Product).filter(Product.product_id == product_id).first()
-    if not product:
-        return False
-
-    product.stock_quantity += quantity
-    db.commit()
-    return True
-
-
-def check_stock_availability(db: Session, items: List[SaleItemCreate]) -> tuple[bool, Optional[str]]:
-    for item in items:
-        product = db.query(Product).filter(Product.product_id == item.product_id).first()
-        if not product:
-            return False, f"Product ID {item.product_id} not found"
-        if product.stock_quantity < item.quantity:
-            return False, f"Insufficient stock for {product.name}. Available: {product.stock_quantity}, Requested: {item.quantity}"
-    return True, None
-
-
-# =========================
-# CREDIT MANAGEMENT
-# =========================
-def deduct_credit(db: Session, customer_id: int, amount: Decimal) -> bool:
-    customer = db.query(Customer).filter(Customer.customer_id == customer_id).first()
-    if not customer:
-        return False
-
-    if customer.credit_balance < amount:
-        return False
-
-    customer.credit_balance -= amount
-    db.commit()
-    return True
-
-
-def restore_credit(db: Session, customer_id: int, amount: Decimal) -> bool:
-    customer = db.query(Customer).filter(Customer.customer_id == customer_id).first()
-    if not customer:
-        return False
-
-    customer.credit_balance -= amount
-    db.commit()
-    return True
-
-
-def add_credit(db: Session, customer_id: int, amount: Decimal) -> bool:
-    customer = db.query(Customer).filter(Customer.customer_id == customer_id).first()
-    if not customer:
-        return False
-
-    customer.credit_balance += amount
-    db.commit()
-    return True
-
-
-# =========================
-# SALE CREATION
-# =========================
 def create_sale(
     db: Session,
-    sale_data: SaleCreate,
+    sale_data,
     user_id: int
-) -> tuple[Optional[Sale], Optional[str]]:
-
-    is_available, error_msg = check_stock_availability(db, sale_data.items)
-    if not is_available:
-        return None, error_msg
-
-    total_amount = Decimal("0")
-    total_tax = Decimal("0")
-
-    for item in sale_data.items:
-        item_subtotal = item.subtotal
-        item_tax = calculate_item_tax(item.unit_price, item.quantity, item.discount)
-        total_amount += item_subtotal
-        total_tax += item_tax
-
-    total_amount = (total_amount - sale_data.discount_amount).quantize(Decimal("0.01"))
-    
-    # Create sale
+) -> Tuple[Optional[Sale], Optional[str]]:
+    """
+    Creates a Sale and its SaleItem rows. Deducts stock from each product.
+    Returns (sale, None) on success, (None, error_message) on failure.
+    """
     sale = Sale(
-        customer_id=sale_data.customer_id,
+        customer_id=sale_data.customer_id,  #optional
         user_id=user_id,
-        bill_date=datetime.utcnow(),
-        total_amount=total_amount,
-        discount_amount=sale_data.discount_amount,
-        tax_amount=total_tax,
-        payment_method=sale_data.payment_method,
-        status="pending" if sale_data.payment_method == "credit" else "paid",
-        receipt_number=generate_receipt_number(db)
+        receipt_number=sale_data.receipt_number, #generated by caller
+        bill_date=date.today(),
+        payment_method=sale_data.payment_method,   #cash|upi|credit
+        discount_amount=sale_data.discount_amount or 0,  #by caller
+        tax_amount=sale_data.tax_amount,   #by caller
+        total_amount=sale_data.total_amount,  #by caller
+        status="completed"
     )
 
     db.add(sale)
-    db.flush()
+    db.flush()  # get sale.bill_id without committing
 
     for item in sale_data.items:
+        product = db.query(Product).filter(Product.product_id == item.product_id).first()
+        if not product:
+            db.rollback()
+            return None, f"Product ID {item.product_id} not found"
+
+        if product.stock < item.quantity:
+            db.rollback()
+            return None, f"Insufficient stock for '{product.name}'"
+
+        # Deduct stock
+        product.stock -= item.quantity
+
         sale_item = SaleItem(
             bill_id=sale.bill_id,
             product_id=item.product_id,
             quantity=item.quantity,
             unit_price=item.unit_price,
-            discount=item.discount,
-            tax_amount=calculate_item_tax(item.unit_price, item.quantity, item.discount),
-            subtotal=item.subtotal
+            total=round(item.unit_price * item.quantity, 2)
         )
         db.add(sale_item)
-        
-        # Decrement stock
-        if not decrement_stock(db, item.product_id, item.quantity):
-            db.rollback()
-            return None, f"Failed to decrement stock for product {item.product_id}"
-    
-    # Handle credit payment
-    if sale_data.payment_method == "credit" and sale_data.customer_id:
-        if not add_credit(db, sale_data.customer_id, total_amount):
-            db.rollback()
-            return None, "Failed to add credit to customer"
-    
-    # Add transaction
-    transaction = Transaction(
-        bill_id=sale.bill_id,
-        amount=total_amount,
-        payment_mode=sale_data.payment_method,
-        reference_no=None  # Can be set later if needed
-    )
-    db.add(transaction)
 
     db.commit()
+    db.refresh(sale)
     return sale, None
 
 
 # =========================
-# SALE REVERSAL
+# GET SALE
 # =========================
-def reverse_sale(db: Session, bill_id: int) -> tuple[bool, Optional[str]]:
 
-    sale = db.query(Sale).filter(Sale.bill_id == bill_id).first()
-    if not sale:
-        return False, "Sale not found"
-
-    if sale.status == "cancelled":
-        return False, "Sale is already cancelled"
-    
-    # Restore stock for all items
-    for item in sale.items:
-        if not restore_stock(db, item.product_id, item.quantity):
-            db.rollback()
-            return False, f"Failed to restore stock for product {item.product_id}"
-    
-    # Handle credit reversal
-    if sale.payment_method == "credit" and sale.customer_id:
-        if not restore_credit(db, sale.customer_id, sale.total_amount):
-            db.rollback()
-            return False, "Failed to restore credit to customer"
-    
-    # Mark sale as cancelled
-    sale.status = "cancelled"
-    db.commit()
-
-    return True, None
-
-
-# =========================
-# SALE RETRIEVAL
-# =========================
 def get_sale_by_id(db: Session, bill_id: int) -> Optional[Sale]:
     return db.query(Sale).filter(Sale.bill_id == bill_id).first()
 
 
+# =========================
+# SALES HISTORY
+# =========================
+
 def get_sales_history(
     db: Session,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    start_date=None,
+    end_date=None,
     payment_method: Optional[str] = None,
     status: Optional[str] = None,
     customer_id: Optional[int] = None,
     skip: int = 0,
-    limit: int = 100
-) -> tuple[List[Sale], int]:
+    limit: int = 50
+) -> Tuple[List[Sale], int]:
     query = db.query(Sale)
 
     if start_date:
@@ -249,58 +123,68 @@ def get_sales_history(
     if customer_id:
         query = query.filter(Sale.customer_id == customer_id)
 
-    total_count = query.count()
+    total = query.count()
     sales = query.order_by(Sale.bill_date.desc()).offset(skip).limit(limit).all()
+    return sales, total
 
-    return sales, total_count
 
+# =========================
+# DAILY SUMMARY
+# =========================
 
-def get_daily_summary(db: Session, summary_date: date) -> Dict:
-    start = datetime.combine(summary_date, datetime.min.time())
-    end = datetime.combine(summary_date, datetime.max.time())
-
+def get_daily_summary(db: Session, summary_date: date) -> dict:
     sales = db.query(Sale).filter(
-        Sale.bill_date >= start,
-        Sale.bill_date <= end,
-        Sale.status != "cancelled"
+        func.date(Sale.bill_date) == summary_date,
+        Sale.status == "completed"
     ).all()
 
-    total_sales = Decimal("0")
-    total_discount = Decimal("0")
-    total_tax = Decimal("0")
-    payment_breakdown = {}
+    total_revenue = sum(s.total_amount for s in sales)
+    total_discount = sum(s.discount_amount or 0 for s in sales)
+    total_tax = sum(s.tax_amount or 0 for s in sales)
+    order_count = len(sales)
 
-    for sale in sales:
-        total_sales += sale.total_amount
-        total_discount += sale.discount_amount
-        total_tax += sale.tax_amount
-        
-        # Payment breakdown
-        if sale.payment_method not in payment_breakdown:
-            payment_breakdown[sale.payment_method] = Decimal("0")
-        payment_breakdown[sale.payment_method] += sale.total_amount
-
-    total_revenue = total_sales + total_tax - total_discount
+    cash = sum(s.total_amount for s in sales if s.payment_method == "cash")
+    upi = sum(s.total_amount for s in sales if s.payment_method == "upi")
+    credit = sum(s.total_amount for s in sales if s.payment_method == "credit")
 
     return {
-        "date": summary_date.isoformat(),
-        "total_sales": total_sales,
-        "total_discount": total_discount,
-        "total_tax": total_tax,
-        "total_revenue": total_revenue,
-        "transaction_count": len(sales),
-        "payment_breakdown": {k: str(v) for k, v in payment_breakdown.items()}
+        "date": str(summary_date),
+        "total_revenue": round(total_revenue, 2),
+        "total_discount": round(total_discount, 2),
+        "total_tax": round(total_tax, 2),
+        "order_count": order_count,
+        "average_order_value": round(total_revenue / order_count, 2) if order_count else 0.0,
+        "payment_breakdown": {
+            "cash": round(cash, 2),
+            "upi": round(upi, 2),
+            "credit": round(credit, 2)
+        }
     }
 
 
 # =========================
-# PRODUCT SEARCH
+# SALE REVERSAL
 # =========================
-def search_products(db: Session, query: str) -> List[Product]:
-    return db.query(Product).filter(
-        Product.name.ilike(f"%{query}%")
-    ).limit(10).all()
 
+def reverse_sale(db: Session, bill_id: int) -> Tuple[bool, Optional[str]]:
+    """
+    Marks the sale as reversed and restores stock for each item.
+    Credit balance adjustments are handled by the route layer.
+    """
+    sale = get_sale_by_id(db, bill_id)
+    if not sale:
+        return False, "Sale not found"
 
-def get_product_by_id(db: Session, product_id: int) -> Optional[Product]:
-    return db.query(Product).filter(Product.product_id == product_id).first()
+    if sale.status == "reversed":
+        return False, "Sale is already reversed"
+
+    # Restore stock
+    items = db.query(SaleItem).filter(SaleItem.bill_id == bill_id).all()
+    for item in items:
+        product = db.query(Product).filter(Product.product_id == item.product_id).first()
+        if product:
+            product.stock += item.quantity
+
+    sale.status = "reversed"
+    db.commit()
+    return True, None
