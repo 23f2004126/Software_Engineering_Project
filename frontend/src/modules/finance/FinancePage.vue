@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import MainLayout from '../../layouts/MainLayout.vue'
 import Card from '../../components/ui/Card.vue'
 import Button from '../../components/ui/Button.vue'
@@ -7,52 +7,88 @@ import Input from '../../components/ui/Input.vue'
 import Table from '../../components/ui/Table.vue'
 import { formatCurrency } from '../../utils/currency.js'
 import { formatDate } from '../../utils/dateFormatter.js'
+import { expenseService } from '../../services/apiService.js'
 
 const form = ref({
   category: 'rent',
   amount: 0,
   date: new Date().toISOString().split('T')[0],
-  description: '',
+  title: '',
 })
 
 const errors = ref({})
 const isSubmitting = ref(false)
+const loading = ref(false)
+const error = ref(null)
 
-const mockExpenses = [
-  { id: 1, date: '2025-06-05', category: 'rent', amount: 15000, description: 'Shop rent - June', recurring: true },
-  { id: 2, date: '2025-06-04', category: 'salary', amount: 18000, description: 'Salary - Ravi Kumar', recurring: false },
-  { id: 3, date: '2025-06-03', category: 'utilities', amount: 2500, description: 'Electricity bill', recurring: true },
-  { id: 4, date: '2025-06-02', category: 'maintenance', amount: 1200, description: 'Fridge cooling repair', recurring: false },
-  { id: 5, date: '2025-06-01', category: 'supplies', amount: 3400, description: 'Packaging materials', recurring: false },
-]
+const expenses = ref([])
 
-const handleAddExpense = () => {
+const handleAddExpense = async () => {
   errors.value = {}
   if (!form.value.amount) {
     errors.value.amount = 'Amount is required'
   }
+  if (!form.value.title) {
+    errors.value.title = 'Title is required'
+  }
   if (Object.keys(errors.value).length > 0) return
 
   isSubmitting.value = true
-  setTimeout(() => {
-    isSubmitting.value = false
+  try {
+    await expenseService.addExpense({
+      title: form.value.title,
+      amount: form.value.amount,
+      category: form.value.category,
+      note: form.value.title,
+      expense_date: form.value.date,
+      recurring: false,
+    })
+    
+    // Reload expenses
+    await loadExpenses()
+    
     form.value = {
       category: 'rent',
       amount: 0,
       date: new Date().toISOString().split('T')[0],
-      description: '',
+      title: '',
     }
-  }, 800)
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    isSubmitting.value = false
+  }
 }
 
+const loadExpenses = async () => {
+  loading.value = true
+  error.value = null
+  try {
+    const data = await expenseService.getExpenses({
+      limit: 100
+    })
+    expenses.value = data || []
+  } catch (err) {
+    error.value = err.message
+    console.error('Failed to load expenses:', err)
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  loadExpenses()
+})
+
 const totalExpenses = computed(() => {
-  return mockExpenses.reduce((sum, exp) => sum + exp.amount, 0)
+  return expenses.value.reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0)
 })
 
 const categoryExpenses = computed(() => {
   const obj = {}
-  mockExpenses.forEach((exp) => {
-    obj[exp.category] = (obj[exp.category] || 0) + exp.amount
+  expenses.value.forEach((exp) => {
+    const category = exp.category || 'other'
+    obj[category] = (obj[category] || 0) + (parseFloat(exp.amount) || 0)
   })
   return obj
 })
@@ -63,11 +99,16 @@ const categoryColors = {
   utilities: { bg: 'bg-yellow-50', text: 'text-yellow-600', icon: '⚡' },
   maintenance: { bg: 'bg-purple-50', text: 'text-purple-600', icon: '🔧' },
   supplies: { bg: 'bg-green-50', text: 'text-green-600', icon: '📦' },
+  other: { bg: 'bg-slate-50', text: 'text-slate-600', icon: '📋' },
 }
 
 const todayRevenue = 18450
-const todayExpenses = 2200
-const netProfit = computed(() => todayRevenue - todayExpenses)
+const todayExpenses = computed(() => {
+  return expenses.value
+    .filter(exp => new Date(exp.expense_date).toDateString() === new Date().toDateString())
+    .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0)
+})
+const netProfit = computed(() => todayRevenue - todayExpenses.value)
 </script>
 
 <template>
@@ -119,16 +160,13 @@ const netProfit = computed(() => todayRevenue - todayExpenses)
             <!-- Date -->
             <Input v-model="form.date" label="Date" type="date" />
 
-            <!-- Description -->
-            <div>
-              <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
-              <input
-                v-model="form.description"
-                type="text"
-                class="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                placeholder="e.g., Monthly rent - June"
-              />
-            </div>
+            <!-- Title -->
+            <Input
+              v-model="form.title"
+              label="Title"
+              placeholder="e.g., Monthly rent - June"
+              :error="errors.title"
+            />
 
             <!-- Recurring -->
             <label class="flex items-center gap-2 cursor-pointer">
@@ -174,19 +212,29 @@ const netProfit = computed(() => todayRevenue - todayExpenses)
 
         <!-- Expenses Table -->
         <Card padding="none">
+          <div v-if="loading" class="p-8 text-center text-slate-500">Loading expenses...</div>
+          <div v-else-if="error" class="p-8 text-center text-red-600">Error: {{ error }}</div>
+          <div v-else-if="expenses.length === 0" class="p-8 text-center text-slate-500">No expenses recorded yet</div>
           <Table
+            v-else
             :columns="[
-              { key: 'date', label: 'Date' },
+              { key: 'expense_date', label: 'Date' },
               { key: 'category', label: 'Category' },
-              { key: 'description', label: 'Description' },
+              { key: 'title', label: 'Title' },
               { key: 'amount', label: 'Amount' },
               { key: 'actions', label: '' },
             ]"
-            :rows="mockExpenses"
+            :rows="expenses"
             striped
           >
+            <template #expense_date="{ value }">
+              <span class="text-sm">{{ new Date(value).toLocaleDateString() }}</span>
+            </template>
             <template #category="{ value }">
-              <span class="text-sm font-medium">{{ categoryColors[value]?.icon }} {{ value }}</span>
+              <span class="text-sm font-medium">{{ categoryColors[value]?.icon || '📋' }} {{ value }}</span>
+            </template>
+            <template #title="{ value }">
+              <span class="text-sm text-slate-600">{{ value }}</span>
             </template>
             <template #amount="{ value }">
               <span class="font-mono font-semibold text-red-600">- {{ formatCurrency(value) }}</span>

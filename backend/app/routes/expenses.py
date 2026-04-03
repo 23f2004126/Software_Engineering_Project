@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator, Field
 from typing import List, Optional
 from datetime import date, datetime
+from decimal import Decimal
 
 from app.database import get_db
 from app.models.user import Expense, User
@@ -21,25 +22,28 @@ VALID_CATEGORIES = ("rent", "salary", "utilities", "maintenance", "supplies", "o
 
 class ExpenseCreate(BaseModel):
     title: str
-    amount: float
+    amount: Decimal = Field(..., gt=0)
     category: str
     note: Optional[str] = None
     expense_date: Optional[date] = None
     recurring: bool = False
 
-    @validator("amount")
+    @field_validator("amount")
+    @classmethod
     def amount_positive(cls, v):
         if v <= 0:
             raise ValueError("Expense amount must be greater than 0")
         return v
 
-    @validator("category")
+    @field_validator("category")
+    @classmethod
     def valid_category(cls, v):
         if v not in VALID_CATEGORIES:
             raise ValueError(f"Category must be one of: {', '.join(VALID_CATEGORIES)}")
         return v
 
-    @validator("expense_date")
+    @field_validator("expense_date")
+    @classmethod
     def date_not_future(cls, v):
         if v and v > date.today():
             raise ValueError("Expense date cannot be in the future")
@@ -49,7 +53,7 @@ class ExpenseCreate(BaseModel):
 class ExpenseResponse(BaseModel):
     expense_id: int
     title: str
-    amount: float
+    amount: Decimal
     category: str
     note: Optional[str] = None
     expense_date: date
@@ -62,7 +66,7 @@ class ExpenseResponse(BaseModel):
 
 class CategorySummary(BaseModel):
     category: str
-    total: float
+    total: Decimal
     count: int
     percentage: float
 
@@ -70,18 +74,18 @@ class CategorySummary(BaseModel):
 class ExpenseSummaryResponse(BaseModel):
     month: int
     year: int
-    total_expenses: float
+    total_expenses: Decimal
     by_category: List[CategorySummary]
-    previous_month_total: float
+    previous_month_total: Decimal
     change_percentage: float
 
 
 class FinancialReportResponse(BaseModel):
     from_date: date
     to_date: date
-    total_revenue: float
-    total_expenses: float
-    net_profit: float
+    total_revenue: Decimal
+    total_expenses: Decimal
+    net_profit: Decimal
     profit_margin_pct: float
     expense_breakdown: List[CategorySummary]
 

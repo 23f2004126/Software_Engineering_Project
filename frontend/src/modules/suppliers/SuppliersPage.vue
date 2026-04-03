@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import MainLayout from '../../layouts/MainLayout.vue'
 import Card from '../../components/ui/Card.vue'
 import Button from '../../components/ui/Button.vue'
@@ -7,43 +7,72 @@ import Input from '../../components/ui/Input.vue'
 import Modal from '../../components/ui/Modal.vue'
 import { formatCurrency } from '../../utils/currency.js'
 import { formatDate } from '../../utils/dateFormatter.js'
+import { supplierService } from '../../services/apiService.js'
 
-const mockSuppliers = ref([
-  { id: 1, name: 'Fresh Farms Dairy', contact: 'Rajesh Kumar', phone: '9876543210', email: 'fresh@farm.com', city: 'Pune', rating: 4.8, pending: 45000, nextDelivery: '2025-06-08' },
-  { id: 2, name: 'Pure Milk Co', contact: 'Priya Sharma', phone: '9876543211', email: 'pure@milk.com', city: 'Mumbai', rating: 4.5, pending: 32000, nextDelivery: '2025-06-10' },
-  { id: 3, name: 'Organic Suppliers', contact: 'Vikram Singh', phone: '9876543212', email: 'organic@supply.com', city: 'Delhi', rating: 4.2, pending: 68000, nextDelivery: '2025-06-15' },
-  { id: 4, name: 'Dairy Direct', contact: 'Neha Patel', phone: '9876543213', email: 'direct@dairy.com', city: 'Bangalore', rating: 4.6, pending: 21000, nextDelivery: '2025-06-07' },
-  { id: 5, name: 'Premium Milk Hub', contact: 'Amit Verma', phone: '9876543214', email: 'premium@hub.com', city: 'Ahmedabad', rating: 4.3, pending: 38500, nextDelivery: '2025-06-12' },
-  { id: 6, name: 'Valley Dairy Farm', contact: 'Ananya Das', phone: '9876543215', email: 'valley@farm.com', city: 'Jaipur', rating: 4.7, pending: 55000, nextDelivery: '2025-06-09' },
-])
-
+const suppliers = ref([])
+const loading = ref(false)
+const error = ref(null)
 const showAddModal = ref(false)
 const showPaymentPanel = ref(true)
 const expandedPayments = ref(new Set())
 
 const newSupplier = ref({
   name: '',
-  contact: '',
+  contact_person: '',
   phone: '',
   email: '',
   city: '',
+  rating: 4.5,
+  payment_terms: 30,
+  status: 'active',
 })
 
-const handleAddSupplier = () => {
-  mockSuppliers.value.push({
-    id: mockSuppliers.value.length + 1,
-    ...newSupplier.value,
-    rating: 4.5,
-    pending: 0,
-    nextDelivery: new Date().toISOString().split('T')[0],
-  })
-  showAddModal.value = false
-  newSupplier.value = {
-    name: '',
-    contact: '',
-    phone: '',
-    email: '',
-    city: '',
+// Load suppliers on mount
+onMounted(async () => {
+  await loadSuppliers()
+})
+
+const loadSuppliers = async () => {
+  loading.value = true
+  error.value = null
+  try {
+    const data = await supplierService.getSuppliers()
+    suppliers.value = data
+  } catch (err) {
+    error.value = err.message
+    console.error('Failed to load suppliers:', err)
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleAddSupplier = async () => {
+  try {
+    await supplierService.createSupplier({
+      name: newSupplier.value.name,
+      contact_person: newSupplier.value.contact_person,
+      phone: newSupplier.value.phone,
+      email: newSupplier.value.email,
+      city: newSupplier.value.city,
+      rating: newSupplier.value.rating,
+      payment_terms: newSupplier.value.payment_terms,
+      status: newSupplier.value.status,
+    })
+    await loadSuppliers()
+    showAddModal.value = false
+    newSupplier.value = {
+      name: '',
+      contact_person: '',
+      phone: '',
+      email: '',
+      city: '',
+      rating: 4.5,
+      payment_terms: 30,
+      status: 'active',
+    }
+  } catch (err) {
+    error.value = err.message
+    console.error('Failed to create supplier:', err)
   }
 }
 
@@ -71,13 +100,21 @@ const togglePaymentPanel = (id) => {
       </div>
 
       <!-- Supplier Cards Grid -->
-      <div class="grid grid-cols-3 gap-5">
-        <Card v-for="supplier in mockSuppliers" :key="supplier.id" hover>
+      <div v-if="loading" class="text-center py-8 text-slate-500">Loading suppliers...</div>
+      <div v-else-if="error" class="bg-red-50 border border-red-300 rounded-lg p-4 text-red-700">
+        <p>Error loading suppliers: {{ error }}</p>
+        <Button variant="secondary" size="sm" @click="loadSuppliers" class="mt-2">Retry</Button>
+      </div>
+      <div v-else-if="suppliers.length === 0" class="text-center py-8 text-slate-500">
+        <p>No suppliers found. Add one to get started!</p>
+      </div>
+      <div v-else class="grid grid-cols-3 gap-5">
+        <Card v-for="supplier in suppliers" :key="supplier.supplier_id" hover>
           <template #header>
             <div class="flex items-start justify-between">
               <div>
                 <p class="font-semibold text-slate-900">{{ supplier.name }}</p>
-                <p class="text-sm text-slate-500 mt-1">{{ supplier.contact }}</p>
+                <p class="text-sm text-slate-500 mt-1">{{ supplier.contact_person || 'Contact unavailable' }}</p>
               </div>
               <div class="text-right">
                 <p class="text-lg">⭐</p>
@@ -96,12 +133,12 @@ const togglePaymentPanel = (id) => {
               <span class="text-sm font-mono">{{ supplier.phone }}</span>
             </div>
             <div class="flex items-center justify-between">
-              <span class="text-sm text-slate-600">🚚 Next Delivery:</span>
-              <span class="text-sm font-semibold">{{ formatDate(supplier.nextDelivery, 'short') }}</span>
+              <span class="text-sm text-slate-600">📧 Email:</span>
+              <span class="text-sm font-mono">{{ supplier.email }}</span>
             </div>
-            <div class="bg-red-50 rounded-lg p-3 border border-red-100">
-              <p class="text-xs text-red-600 font-semibold mb-1">Pending Payment</p>
-              <p class="font-mono font-bold text-red-600">{{ formatCurrency(supplier.pending) }}</p>
+            <div class="bg-blue-50 rounded-lg p-3 border border-blue-100">
+              <p class="text-xs text-blue-600 font-semibold mb-1">Payment Terms</p>
+              <p class="font-mono font-bold text-blue-600">{{ supplier.payment_terms }} days</p>
             </div>
           </div>
 
@@ -110,8 +147,8 @@ const togglePaymentPanel = (id) => {
               <Button variant="secondary" size="sm" fullWidth>
                 Contact
               </Button>
-              <Button variant="secondary" size="sm" fullWidth @click="togglePaymentPanel(supplier.id)">
-                {{ expandedPayments.has(supplier.id) ? 'Hide' : 'Pay' }}
+              <Button variant="secondary" size="sm" fullWidth @click="togglePaymentPanel(supplier.supplier_id)">
+                {{ expandedPayments.has(supplier.supplier_id) ? 'Hide' : 'Pay' }}
               </Button>
             </div>
           </template>
@@ -119,14 +156,14 @@ const togglePaymentPanel = (id) => {
       </div>
 
       <!-- Pending Payments Panel -->
-      <Card v-if="showPaymentPanel" class="bg-red-50 border-red-100">
+      <Card v-if="showPaymentPanel && suppliers.length > 0" class="bg-blue-50 border-blue-100">
         <template #header>
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <span class="text-2xl">💳</span>
               <div>
-                <p class="font-semibold text-slate-900">Pending Payments Overview</p>
-                <p class="text-xs text-slate-500 mt-0.5">Pay suppliers for pending orders</p>
+                <p class="font-semibold text-slate-900">Suppliers Management</p>
+                <p class="text-xs text-slate-500 mt-0.5">Manage supplier payments and details</p>
               </div>
             </div>
             <button class="text-slate-400 hover:text-slate-600 font-bold" @click="showPaymentPanel = false">
@@ -136,36 +173,36 @@ const togglePaymentPanel = (id) => {
         </template>
 
         <div class="space-y-3">
-          <div v-for="supplier in mockSuppliers" :key="supplier.id" class="bg-white rounded-xl p-4 border border-red-100">
+          <div v-for="supplier in suppliers" :key="supplier.supplier_id" class="bg-white rounded-xl p-4 border border-blue-100">
             <div class="flex items-start justify-between mb-3">
               <div>
                 <p class="font-semibold text-slate-900">{{ supplier.name }}</p>
-                <p class="text-sm text-slate-500">{{ supplier.contact }} • {{ supplier.phone }}</p>
+                <p class="text-sm text-slate-500">{{ supplier.contact_person }} • {{ supplier.phone }}</p>
               </div>
-              <p class="font-mono font-bold text-2xl text-red-600">{{ formatCurrency(supplier.pending) }}</p>
+              <p class="font-mono font-bold text-sm text-blue-600">Rating: {{ supplier.rating }}/5</p>
             </div>
 
-            <div v-show="expandedPayments.has(supplier.id)" class="border-t border-slate-200 pt-3 mt-3">
+            <div v-show="expandedPayments.has(supplier.supplier_id)" class="border-t border-slate-200 pt-3 mt-3">
               <div class="space-y-3 mb-4">
                 <div class="flex items-center justify-between text-sm">
-                  <span class="text-slate-600">Order #SO-2541</span>
-                  <span class="font-semibold">{{ formatCurrency(15000) }}</span>
+                  <span class="text-slate-600">Status</span>
+                  <span class="font-semibold">{{ supplier.status }}</span>
                 </div>
                 <div class="flex items-center justify-between text-sm">
-                  <span class="text-slate-600">Order #SO-2540</span>
-                  <span class="font-semibold">{{ formatCurrency(18000) }}</span>
+                  <span class="text-slate-600">Email</span>
+                  <span class="font-semibold">{{ supplier.email }}</span>
                 </div>
                 <div class="flex items-center justify-between text-sm">
-                  <span class="text-slate-600">Order #SO-2539</span>
-                  <span class="font-semibold">{{ formatCurrency(12000) }}</span>
+                  <span class="text-slate-600">City</span>
+                  <span class="font-semibold">{{ supplier.city }}</span>
                 </div>
               </div>
               <div class="flex gap-2">
-                <Button variant="primary" size="sm" fullWidth>
-                  Make Payment
+                <Button variant="primary" size="sm" fullWidth @click="togglePaymentPanel(supplier.supplier_id)">
+                  Record Payment
                 </Button>
                 <Button variant="secondary" size="sm" fullWidth>
-                  Send Invoice
+                  Edit
                 </Button>
               </div>
             </div>

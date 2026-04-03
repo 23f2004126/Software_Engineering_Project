@@ -9,17 +9,21 @@ import RevenueExpenseChart from '../../components/charts/RevenueExpenseChart.vue
 import AIInsightCard from '../../components/ai/AIInsightCard.vue'
 import { formatCurrency } from '../../utils/currency.js'
 import { getIcon } from '../../utils/iconMap.js'
+import { dashboardService } from '../../services/apiService.js'
 
 const authStore = useAuthStore()
 
 const kpiCards = ref([
-  { label: "Today's Sales", value: 18450, displayValue: 0, change: 12.4, icon: 'shopping-cart', color: 'emerald' },
-  { label: "Today's Net Profit", value: 4210, displayValue: 0, change: 8.1, icon: 'arrow-trending-up', color: 'teal' },
-  { label: 'Monthly Revenue', value: 324800, displayValue: 0, change: 5.3, icon: 'currency-rupee', color: 'blue' },
-  { label: 'Outstanding Credit', value: 12300, displayValue: 0, change: -2.1, icon: 'document-text', color: 'amber' },
-  { label: 'Low Stock Items', value: 7, displayValue: 0, change: null, icon: 'cube-transparent', color: 'red' },
-  { label: 'Expiring Soon', value: 3, displayValue: 0, change: null, icon: 'hourglass', color: 'amber' },
+  { label: "Today's Sales", value: 0, displayValue: 0, change: 0, icon: 'shopping-cart', color: 'emerald' },
+  { label: "Today's Net Profit", value: 0, displayValue: 0, change: 0, icon: 'arrow-trending-up', color: 'teal' },
+  { label: 'Monthly Revenue', value: 0, displayValue: 0, change: 0, icon: 'currency-rupee', color: 'blue' },
+  { label: 'Outstanding Credit', value: 0, displayValue: 0, change: 0, icon: 'document-text', color: 'amber' },
+  { label: 'Low Stock Items', value: 0, displayValue: 0, change: null, icon: 'cube-transparent', color: 'red' },
+  { label: 'Expiring Soon', value: 0, displayValue: 0, change: null, icon: 'hourglass', color: 'amber' },
 ])
+
+const loading = ref(false)
+const error = ref(null)
 
 // Employee view cards (only Today's Sales and Low Stock)
 const employeeKpiCards = computed(() => {
@@ -28,60 +32,80 @@ const employeeKpiCards = computed(() => {
   )
 })
 
-const aiInsights = [
-  {
-    type: 'warning',
-    icon: 'arrow-trending-up',
-    title: 'Demand Rising',
-    message: 'Tata Salt 1kg sales up 34% this week. Consider restocking.',
-    linkLabel: 'View Inventory',
-    linkRoute: '/inventory',
-  },
-  {
-    type: 'danger',
-    icon: 'exclamation-circle',
-    title: 'Stock Critical',
-    message: 'Aashirvaad Atta 5kg has only 2 units left. Reorder now.',
-    linkLabel: 'Reorder Now',
-    linkRoute: '/purchase-orders',
-  },
-  {
-    type: 'success',
-    icon: 'sparkles',
-    title: 'Profit Boost',
-    message: 'Net profit up ₹840 today vs yesterday. Margin improved 2%.',
-    linkLabel: 'View Finance',
-    linkRoute: '/finance',
-  },
-  {
-    type: 'warning',
-    icon: 'clock-alert',
-    title: 'Expiry Alert',
-    message: '3 items expire within 7 days. Check inventory to avoid losses.',
-    linkLabel: 'View Items',
-    linkRoute: '/inventory',
-  },
-]
-
-const recentTransactions = [
-  { id: '#BL-00234', customer: 'Walk-in Customer', amount: 428, mode: 'cash', time: '11:32 AM' },
-  { id: '#BL-00233', customer: 'Ramesh Patil', amount: 1240, mode: 'credit', time: '10:15 AM' },
-  { id: '#BL-00232', customer: 'Sunita Sharma', amount: 892, mode: 'upi', time: '09:48 AM' },
-  { id: '#BL-00231', customer: 'Walk-in Customer', amount: 1650, mode: 'cash', time: '08:52 AM' },
-  { id: '#BL-00230', customer: 'Vikram Nair', amount: 2340, mode: 'credit', time: 'Yesterday' },
-]
-
-const notifications = [
-  { id: 1, icon: 'cube-transparent', title: 'Low Stock', message: 'Amul Butter 100g — only 2 units left', type: 'stock' },
-  { id: 2, icon: 'document-text', title: 'Credit Alert', message: 'Ramesh Patil — ₹3,200 overdue', type: 'credit' },
-  { id: 3, icon: 'hourglass', title: 'Expiry Soon', message: 'Amul Curd 400g expires in 2 days', type: 'expiry' },
-  { id: 4, icon: 'check-circle', title: 'Shift Ended', message: 'Ravi Kumar — 6h 45m', type: 'shift' },
-]
-
+const aiInsights = ref([])
+const recentTransactions = ref([])
+const notifications = ref([])
 const dismissedInsights = ref(new Set())
 
-onMounted(() => {
-  // Count-up animation for KPI cards
+// Load dashboard data
+onMounted(async () => {
+  await loadDashboardData()
+  // Animate KPI count-up
+  animateKPIs()
+})
+
+const loadDashboardData = async () => {
+  loading.value = true
+  error.value = null
+  try {
+    const [kpis, alerts] = await Promise.all([
+      dashboardService.getKPIs(),
+      dashboardService.getAlerts()
+    ])
+    
+    // Update KPI cards with real data
+    if (kpis) {
+      kpiCards.value[0].value = kpis.today_sales || 0
+      kpiCards.value[1].value = kpis.today_profit || 0
+      kpiCards.value[2].value = kpis.monthly_revenue || 0
+      kpiCards.value[3].value = kpis.outstanding_credit || 0
+      kpiCards.value[4].value = kpis.low_stock_count || 0
+      kpiCards.value[5].value = kpis.expiring_count || 0
+    }
+    
+    // Map alerts to insights format
+    if (alerts && alerts.length > 0) {
+      aiInsights.value = alerts.slice(0, 4).map((alert, idx) => ({
+        type: alert.type || (idx === 0 ? 'warning' : idx === 1 ? 'danger' : 'success'),
+        icon: alert.icon || 'sparkles',
+        title: alert.title || 'Alert',
+        message: alert.message || '',
+        linkLabel: 'View',
+        linkRoute: '/inventory'
+      }))
+    }
+    
+    // Load recent sales transactions
+    const summary = await dashboardService.getSummary()
+    if (summary && summary.recent_sales) {
+      recentTransactions.value = summary.recent_sales.slice(0, 5).map(sale => ({
+        id: `#BL-${sale.bill_id}`,
+        customer: sale.customer_name || 'Walk-in Customer',
+        amount: sale.total_amount,
+        mode: sale.payment_method || 'cash',
+        time: new Date(sale.bill_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }))
+    }
+
+    // Set notifications from alerts
+    if (alerts && alerts.length > 0) {
+      notifications.value = alerts.map(alert => ({
+        id: alert.id,
+        icon: alert.icon || 'sparkles',
+        title: alert.title,
+        message: alert.message,
+        type: alert.type
+      }))
+    }
+  } catch (err) {
+    error.value = err.message
+    console.error('Failed to load dashboard:', err)
+  } finally {
+    loading.value = false
+  }
+}
+
+const animateKPIs = () => {
   kpiCards.value.forEach((card, index) => {
     setTimeout(() => {
       const max = card.value
@@ -96,7 +120,7 @@ onMounted(() => {
       }, 20)
     }, index * 60)
   })
-})
+}
 
 const handleDismissInsight = (index) => {
   dismissedInsights.value.add(index)
@@ -121,16 +145,32 @@ const notificationColors = {
 <template>
   <MainLayout>
     <div class="space-y-6">
-      <!-- Greeting -->
-      <div class="flex items-center justify-between">
-        <h1 class="text-xl font-semibold text-slate-900">Good morning, Anjali 👋</h1>
-        <div class="bg-slate-100 text-slate-600 text-sm rounded-full px-3 py-1.5 font-medium">
-          {{ new Date().toLocaleDateString('en-IN', { weekday: 'long', month: 'short', day: 'numeric' }) }}
-        </div>
+      <!-- Error state -->
+      <div v-if="error" class="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+        <p class="font-medium">Failed to load dashboard</p>
+        <p class="text-sm mt-1">{{ error }}</p>
       </div>
 
-      <!-- KPI Cards -->
-      <div v-if="authStore.isOwner" class="grid grid-cols-3 gap-5">
+      <!-- Loading state -->
+      <div v-if="loading" class="text-center py-12">
+        <div class="inline-block">
+          <div class="animate-spin w-8 h-8 border-4 border-slate-200 border-t-emerald-600 rounded-full"></div>
+        </div>
+        <p class="text-slate-500 mt-4">Loading dashboard data...</p>
+      </div>
+
+      <!-- Main content -->
+      <template v-else>
+        <!-- Greeting -->
+        <div class="flex items-center justify-between">
+          <h1 class="text-xl font-semibold text-slate-900">Good morning, Anjali 👋</h1>
+          <div class="bg-slate-100 text-slate-600 text-sm rounded-full px-3 py-1.5 font-medium">
+            {{ new Date().toLocaleDateString('en-IN', { weekday: 'long', month: 'short', day: 'numeric' }) }}
+          </div>
+        </div>
+
+        <!-- KPI Cards -->
+        <div v-if="authStore.isOwner" class="grid grid-cols-3 gap-5">
         <Card
           v-for="(card, index) in kpiCards"
           :key="index"
@@ -315,6 +355,7 @@ const notificationColors = {
           </Card>
         </div>
       </div>
+      </template>
     </div>
   </MainLayout>
 </template>

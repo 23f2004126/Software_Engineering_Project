@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from datetime import datetime
 from typing import List, Optional
 from decimal import Decimal
@@ -11,14 +11,14 @@ from enum import Enum
 
 class PaymentMethodEnum(str, Enum):
     CASH = "cash"
+    CARD = "card"
     UPI = "upi"
     CREDIT = "credit"
     
 
 class SaleStatusEnum(str, Enum):
-    COMPLETED = "completed"
+    PAID = "paid"
     PENDING = "pending"
-    REVERSED = "reversed"
     CANCELLED = "cancelled"
 
 
@@ -53,7 +53,26 @@ class SaleItemCreate(BaseModel):
     unit_price: Decimal
     discount: Decimal = Decimal("0")
     tax_amount: Decimal = Decimal("0")
-    total: Decimal                   
+    total: Decimal
+    
+    @field_validator("total")
+    @classmethod
+    def validate_total(cls, v, info):
+        if "quantity" in info.data and "unit_price" in info.data:
+            quantity = info.data["quantity"]
+            unit_price = info.data["unit_price"]
+            discount = info.data.get("discount", Decimal("0"))
+            tax_amount = info.data.get("tax_amount", Decimal("0"))
+            
+            subtotal = Decimal(str(quantity)) * unit_price
+            calculated_total = subtotal - discount + tax_amount
+            
+            if abs(v - calculated_total) > Decimal("0.01"):  # Allow for rounding
+                raise ValueError(
+                    f"Item total {v} does not match calculated total {calculated_total}. "
+                    f"Expected: {quantity} x {unit_price} - {discount} + {tax_amount} = {calculated_total}"
+                )
+        return v                   
 
 
 class SaleItemResponse(BaseModel):

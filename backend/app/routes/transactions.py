@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator, Field
 from typing import List, Optional
 from datetime import datetime, date, timedelta
+from decimal import Decimal
 
 from app.database import get_db
 from app.models.user import CreditTransaction, Customer, User
@@ -17,19 +18,21 @@ router = APIRouter(prefix="/api/transactions", tags=["Transactions"])
 
 class TransactionCreate(BaseModel):
     customer_id: int
-    amount: float
+    amount: Decimal = Field(..., gt=0)
     type: str                           # debit / credit
     sale_id: Optional[int] = None
     note: Optional[str] = None
     due_date: Optional[date] = None
 
-    @validator("amount")
+    @field_validator("amount")
+    @classmethod
     def amount_positive(cls, v):
         if v <= 0:
             raise ValueError("Amount must be greater than 0")
         return v
 
-    @validator("type")
+    @field_validator("type")
+    @classmethod
     def valid_type(cls, v):
         if v not in ("debit", "credit"):
             raise ValueError("Type must be 'debit' (purchase) or 'credit' (payment)")
@@ -40,7 +43,7 @@ class TransactionResponse(BaseModel):
     transaction_id: int
     customer_id: int
     sale_id: Optional[int] = None
-    amount: float
+    amount: Decimal
     type: str
     status: str
     note: Optional[str] = None
@@ -55,11 +58,11 @@ class CreditReportItem(BaseModel):
     customer_id: int
     name: str
     phone: str
-    current: float
-    overdue_30: float
-    overdue_60: float
-    overdue_90: float
-    total_outstanding: float
+    current: Decimal
+    overdue_30: Decimal
+    overdue_60: Decimal
+    overdue_90: Decimal
+    total_outstanding: Decimal
 
 
 # =========================

@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator, Field
 from typing import List, Optional
 from datetime import datetime, date
+from decimal import Decimal
 
 from app.database import get_db
 from app.models.user import Supplier, User
@@ -23,17 +24,19 @@ class SupplierCreate(BaseModel):
     email: Optional[str] = None
     address: Optional[str] = None
     city: Optional[str] = None
-    rating: float = 0.0
+    rating: float = Field(0.0, ge=0, le=5)
     payment_terms: int = 30
     status: str = "active"
 
-    @validator("rating")
+    @field_validator("rating")
+    @classmethod
     def valid_rating(cls, v):
         if not (0 <= v <= 5):
             raise ValueError("Rating must be between 0 and 5")
         return v
 
-    @validator("status")
+    @field_validator("status")
+    @classmethod
     def valid_status(cls, v):
         if v not in ("active", "inactive"):
             raise ValueError("Status must be 'active' or 'inactive'")
@@ -51,26 +54,28 @@ class SupplierResponse(BaseModel):
     rating: float
     payment_terms: int
     status: str
-    pending_amount: Optional[float] = None
+    pending_amount: Optional[Decimal] = None
 
     class Config:
         from_attributes = True
 
 
 class SupplierPaymentCreate(BaseModel):
-    amount: float
+    amount: Decimal = Field(..., gt=0)
     mode: str
     po_id: Optional[int] = None
     cheque_no: Optional[str] = None
     note: Optional[str] = None
 
-    @validator("amount")
+    @field_validator("amount")
+    @classmethod
     def amount_positive(cls, v):
         if v <= 0:
             raise ValueError("Payment amount must be greater than 0")
         return v
 
-    @validator("mode")
+    @field_validator("mode")
+    @classmethod
     def valid_mode(cls, v):
         if v not in ("cash", "cheque", "transfer", "upi"):
             raise ValueError("Mode must be cash, cheque, transfer, or upi")
@@ -80,7 +85,7 @@ class SupplierPaymentCreate(BaseModel):
 class SupplierPaymentResponse(BaseModel):
     payment_id: int
     supplier_id: int
-    amount: float
+    amount: Decimal
     mode: str
     po_id: Optional[int] = None
     cheque_no: Optional[str] = None
