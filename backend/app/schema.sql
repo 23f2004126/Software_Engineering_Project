@@ -52,7 +52,7 @@ CREATE TABLE users (
 
 -- Insert default admin user
 INSERT INTO users (name, email, password, role_id) VALUES 
-('Admin', 'admin@example.com', '$2b$12$j7exrVAimZUHwjF0Z.KvA.Fo5uP8sxjelMv8K//wVz5LELKJ7NVMS', 1);
+('Admin', 'admin@example.com', '$2b$12$Bzho7Y2pNtq1si4a/w/Ew.XEczESPzlXXP91OoZ3wxr6DIcjDIjM6', 1);
 
 -- =========================
 -- SHIFTS TABLE
@@ -114,10 +114,15 @@ CREATE TABLE customers (
     customer_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100),
     phone VARCHAR(20),
+    email VARCHAR(100),
     address TEXT,
+    city VARCHAR(100),
+    credit_limit DECIMAL(10,2) DEFAULT 0,
     credit_balance DECIMAL(10,2) DEFAULT 0,
-
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    risk_level VARCHAR(20) DEFAULT 'low',
+    status VARCHAR(20) DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 -- =========================
@@ -192,15 +197,44 @@ CREATE TABLE expenses (
 );
 
 -- =========================
+-- CREDIT TRANSACTIONS TABLE
+-- =========================
+CREATE TABLE credit_transactions (
+    transaction_id INT AUTO_INCREMENT PRIMARY KEY,
+    customer_id INT NOT NULL,
+    sale_id INT NULL,
+
+    amount DECIMAL(10,2) NOT NULL,
+    type ENUM('credit', 'payment') NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending',
+    
+    note TEXT,
+    due_date DATE,
+    transaction_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (customer_id) REFERENCES customers(customer_id) ON DELETE CASCADE,
+    FOREIGN KEY (sale_id) REFERENCES bills(bill_id) ON DELETE SET NULL,
+    
+    INDEX idx_customer (customer_id),
+    INDEX idx_transaction_date (transaction_date)
+);
+
+-- =========================
 -- SUPPLIERS TABLE
 -- =========================
 CREATE TABLE suppliers (
     supplier_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100),
+    contact_person VARCHAR(100),
     phone VARCHAR(20),
+    email VARCHAR(100),
     address TEXT,
-
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    city VARCHAR(100),
+    rating DECIMAL(2,1) DEFAULT 0.0,
+    payment_terms INT DEFAULT 30,
+    status VARCHAR(20) DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 -- =========================

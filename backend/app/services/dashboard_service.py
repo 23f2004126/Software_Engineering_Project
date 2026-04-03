@@ -10,6 +10,7 @@ from datetime import date, timedelta
 
 from app.models.user import User, Customer, Expense
 from app.models.sale import Sale, SaleItem, Product
+import app.models.supplier  # noqa: F401 - ensure SupplierPayment mapper is registered
 
 
 # =========================
@@ -201,7 +202,8 @@ def get_top_products(db: Session, limit: int = 5) -> List[dict]:
         db.query(
             Product.name,
             func.sum(SaleItem.quantity).label("total_sold"),
-            func.sum(SaleItem.total).label("total_revenue"),
+            # DB/model column is `subtotal` (bill_items.subtotal), not `total`.
+            func.sum(SaleItem.subtotal).label("total_revenue"),
         )
         .join(SaleItem, Product.product_id == SaleItem.product_id)
         .group_by(Product.product_id, Product.name)

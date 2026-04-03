@@ -48,10 +48,12 @@ const loadDashboardData = async () => {
   loading.value = true
   error.value = null
   try {
-    const [kpis, alerts] = await Promise.all([
+    const [kpisResult, alertsResult] = await Promise.allSettled([
       dashboardService.getKPIs(),
       dashboardService.getAlerts()
     ])
+    const kpis = kpisResult.status === 'fulfilled' ? kpisResult.value : null
+    const alerts = alertsResult.status === 'fulfilled' ? alertsResult.value : null
     
     // Update KPI cards with real data
     if (kpis) {
@@ -64,41 +66,102 @@ const loadDashboardData = async () => {
     }
     
     // Map alerts to insights format
-    if (alerts && alerts.length > 0) {
-      aiInsights.value = alerts.slice(0, 4).map((alert, idx) => ({
-        type: alert.type || (idx === 0 ? 'warning' : idx === 1 ? 'danger' : 'success'),
-        icon: alert.icon || 'sparkles',
-        title: alert.title || 'Alert',
-        message: alert.message || '',
-        linkLabel: 'View',
-        linkRoute: '/inventory'
-      }))
+    if (alerts && typeof alerts === 'object') {
+      const alertsArray = []
+      
+      if (alerts.alert_counts?.low_stock > 0) {
+        alertsArray.push({
+          type: 'warning',
+          icon: 'cube-transparent',
+          title: `${alerts.alert_counts.low_stock} Items Low on Stock`,
+          message: 'Some products are running low on inventory',
+          linkLabel: 'View',
+          linkRoute: '/inventory'
+        })
+      }
+      
+      if (alerts.alert_counts?.expiring_soon > 0) {
+        alertsArray.push({
+          type: 'danger',
+          icon: 'hourglass',
+          title: `${alerts.alert_counts.expiring_soon} Items Expiring Soon`,
+          message: 'Some products are nearing their expiry date',
+          linkLabel: 'View',
+          linkRoute: '/inventory'
+        })
+      }
+      
+      if (alerts.alert_counts?.high_risk_customers > 0) {
+        alertsArray.push({
+          type: 'danger',
+          icon: 'exclamation-triangle',
+          title: `${alerts.alert_counts.high_risk_customers} High-Risk Customers`,
+          message: 'Some customers have high credit utilization',
+          linkLabel: 'View',
+          linkRoute: '/customers'
+        })
+      }
+      
+      aiInsights.value = alertsArray
     }
     
     // Load recent sales transactions
-    const summary = await dashboardService.getSummary()
-    if (summary && summary.recent_sales) {
-      recentTransactions.value = summary.recent_sales.slice(0, 5).map(sale => ({
-        id: `#BL-${sale.bill_id}`,
-        customer: sale.customer_name || 'Walk-in Customer',
-        amount: sale.total_amount,
-        mode: sale.payment_method || 'cash',
-        time: new Date(sale.bill_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      }))
+    try {
+      const summary = await dashboardService.getSummary()
+      if (summary && summary.recent_sales) {
+        recentTransactions.value = summary.recent_sales.slice(0, 5).map(sale => ({
+          id: `#BL-${sale.bill_id}`,
+          customer: sale.customer_name || 'Walk-in Customer',
+          amount: sale.total_amount,
+          mode: sale.payment_method || 'cash',
+          time: new Date(sale.bill_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }))
+      }
+    } catch (summaryErr) {
+      console.error('Failed to load dashboard summary:', summaryErr)
     }
 
     // Set notifications from alerts
-    if (alerts && alerts.length > 0) {
-      notifications.value = alerts.map(alert => ({
-        id: alert.id,
-        icon: alert.icon || 'sparkles',
-        title: alert.title,
-        message: alert.message,
-        type: alert.type
-      }))
+    if (alerts && alerts.alert_counts) {
+      const notificationsArray = []
+      
+      if (alerts.low_stock && alerts.low_stock.length > 0) {
+        notificationsArray.push(...alerts.low_stock.map(item => ({
+          id: `low-stock-${item.product_id}`,
+          icon: 'cube-transparent',
+          title: `Low Stock: ${item.name}`,
+          message: `Current: ${item.current_stock} | Reorder: ${item.reorder_level}`,
+          type: 'warning'
+        })))
+      }
+      
+      if (alerts.expiring_soon && alerts.expiring_soon.length > 0) {
+        notificationsArray.push(...alerts.expiring_soon.map(item => ({
+          id: `expiring-${item.product_id}`,
+          icon: 'hourglass',
+          title: `Expiring Soon: ${item.name}`,
+          message: `${item.days_left} days left | Stock: ${item.stock}`,
+          type: 'danger'
+        })))
+      }
+      
+      if (alerts.high_risk_customers && alerts.high_risk_customers.length > 0) {
+        notificationsArray.push(...alerts.high_risk_customers.map(cust => ({
+          id: `high-risk-${cust.customer_id}`,
+          icon: 'exclamation-triangle',
+          title: `High Risk: ${cust.name}`,
+          message: `${cust.usage_pct}% credit utilization`,
+          type: 'danger'
+        })))
+      }
+      
+      notifications.value = notificationsArray
+    }
+    if (kpisResult.status === 'rejected' && alertsResult.status === 'rejected') {
+      error.value = 'Failed to load dashboard data. Please try again.'
     }
   } catch (err) {
-    error.value = err.message
+    error.value = err.message || 'Failed to load dashboard data'
     console.error('Failed to load dashboard:', err)
   } finally {
     loading.value = false
@@ -135,10 +198,8 @@ const colorClasses = {
 }
 
 const notificationColors = {
-  stock: { bg: 'bg-red-100', text: 'text-red-600' },
-  credit: { bg: 'bg-amber-100', text: 'text-amber-600' },
-  expiry: { bg: 'bg-amber-100', text: 'text-amber-600' },
-  shift: { bg: 'bg-blue-100', text: 'text-blue-600' },
+  warning: { bg: 'bg-amber-100', text: 'text-amber-600' },
+  danger: { bg: 'bg-red-100', text: 'text-red-600' },
 }
 </script>
 
@@ -338,12 +399,12 @@ const notificationColors = {
               >
                 <div
                   class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
-                  :class="`${notificationColors[notif.type].bg}`"
+                :class="`${(notificationColors[notif.type] || notificationColors.warning).bg}`"
                 >
                   <component
                     :is="getIcon(notif.icon)"
                     class="w-4 h-4"
-                    :class="`${notificationColors[notif.type].text}`"
+                  :class="`${(notificationColors[notif.type] || notificationColors.warning).text}`"
                   />
                 </div>
                 <div class="flex-1 min-w-0">

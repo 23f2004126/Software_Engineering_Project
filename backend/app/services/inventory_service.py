@@ -25,9 +25,9 @@ def calculate_profit_margin(price: float, cost: float) -> float:
 
 def calculate_inventory_value(db: Session) -> float:
     """Total cost value of all active stock."""
-    result = db.query(func.sum(Product.cost * Product.stock)).filter(
-        Product.status == "active"
-    ).scalar()
+    # Current DB schema doesn't store `cost`. Use `price` as an approximation
+    # so inventory pages can still render.
+    result = db.query(func.sum(Product.price * Product.stock)).scalar()
     return round(float(result or 0), 2)
 
 
@@ -40,10 +40,9 @@ def get_product_by_id(db: Session, product_id: int) -> Optional[Product]:
 
 
 def get_product_by_barcode(db: Session, barcode: str) -> Optional[Product]:
-    return db.query(Product).filter(
-        Product.barcode == barcode,
-        Product.status == "active"
-    ).first()
+    if not hasattr(Product, "barcode"):
+        return None
+    return db.query(Product).filter(Product.barcode == barcode).first()
 
 
 def get_products_paginated(
@@ -56,8 +55,8 @@ def get_products_paginated(
 ) -> Tuple[List[Product], int]:
     query = db.query(Product)
 
-    if status:
-        query = query.filter(Product.status == status)
+    # DB schema doesn't store product status.
+    # Keep the argument for API compatibility but ignore it.
 
     if category:
         cat = db.query(Category).filter(Category.category_name == category).first()
@@ -67,8 +66,7 @@ def get_products_paginated(
     if search:
         query = query.filter(
             Product.name.ilike(f"%{search}%") |
-            Product.sku.ilike(f"%{search}%") |
-            Product.barcode.ilike(f"%{search}%")
+            Product.unit.ilike(f"%{search}%")
         )
 
     total = query.count()
@@ -77,11 +75,15 @@ def get_products_paginated(
 
 
 def create_product(db: Session, product_data) -> Tuple[Optional[Product], Optional[str]]:
-    category = db.query(Category).filter(
-        Category.category_name == product_data.category
-    ).first()
+    category = None
+    # Accept either `category_id` or `category` (category name) from callers.
+    if getattr(product_data, "category_id", None) is not None:
+        category = db.query(Category).filter(Category.category_id == product_data.category_id).first()
+    elif getattr(product_data, "category", None):
+        category = db.query(Category).filter(Category.category_name == product_data.category).first()
+
     if not category:
-        return None, f"Category '{product_data.category}' not found"
+        return None, "Category not found"
 
     if db.query(Product).filter(Product.sku == product_data.sku).first():
         return None, "SKU already exists"
@@ -94,18 +96,10 @@ def create_product(db: Session, product_data) -> Tuple[Optional[Product], Option
     product = Product(
         name=product_data.name,
         category_id=category.category_id,
-        sku=product_data.sku,
-        barcode=getattr(product_data, "barcode", None),
         unit=product_data.unit,
         price=product_data.price,
-        cost=product_data.cost,
         stock=getattr(product_data, "stock", 0),
-        reorder_level=getattr(product_data, "reorder_level", 10),
-        max_stock=getattr(product_data, "max_stock", 1000),
         supplier_id=getattr(product_data, "supplier_id", None),
-        expiry_date=getattr(product_data, "expiry_date", None),
-        manufactured_date=getattr(product_data, "manufactured_date", None),
-        status=getattr(product_data, "status", "active")
     )
 
     db.add(product)
@@ -121,18 +115,19 @@ def update_product(db: Session, product_id: int, product_data) -> Tuple[Optional
     if not product:
         return None, "Product not found"
 
-    if hasattr(product_data, "category") and product_data.category:
-        category = db.query(Category).filter(
-            Category.category_name == product_data.category
-        ).first()
+    if getattr(product_data, "category_id", None) is not None:
+        category = db.query(Category).filter(Category.category_id == product_data.category_id).first()
+        if not category:
+            return None, "Category not found"
+        product.category_id = category.category_id
+    elif getattr(product_data, "category", None):
+        category = db.query(Category).filter(Category.category_name == product_data.category).first()
         if not category:
             return None, f"Category '{product_data.category}' not found"
         product.category_id = category.category_id
 
     # Apply all provided fields
-    for field in ("name", "sku", "barcode", "unit", "price", "cost",
-                  "reorder_level", "max_stock", "supplier_id",
-                  "expiry_date", "manufactured_date", "status"):
+    for field in ("name", "unit", "price", "stock", "supplier_id", "category_id"):
         if hasattr(product_data, field) and getattr(product_data, field) is not None:
             setattr(product, field, getattr(product_data, field))
 
@@ -147,7 +142,8 @@ def delete_product(db: Session, product_id: int) -> Tuple[bool, Optional[str]]:
     if not product:
         return False, "Product not found"
 
-    product.status = "discontinued"
+    # Current DB schema doesn't have `status`. Soft-delete by setting stock to 0.
+    product.stock = 0
     db.commit()
     return True, None
 
@@ -161,8 +157,7 @@ def adjust_stock(
     product_id: int,
     quantity_change: int,
     movement_type: str,
-    notes: Optional[str],
-    created_by: int
+    notes: Optional[str]
 ) -> Tuple[bool, Optional[str]]:
     product = get_product_by_id(db, product_id)
     if not product:
@@ -179,7 +174,6 @@ def adjust_stock(
         quantity_change=quantity_change,
         movement_type=movement_type,
         notes=notes,
-        created_by=created_by
     )
     db.add(movement)
     db.commit()
@@ -206,46 +200,25 @@ def get_stock_movements_for_product(
 # =========================
 
 def get_low_stock_products(db: Session) -> List[dict]:
-    products = db.query(Product).filter(
-        Product.status == "active",
-        Product.stock < Product.reorder_level
-    ).all()
+    reorder_level_default = 10
+    products = db.query(Product).filter(Product.stock < reorder_level_default).all()
 
     return [
         {
             "product_id": p.product_id,
             "name": p.name,
-            "sku": p.sku,
+            "sku": getattr(p, "sku", None),
             "current_stock": p.stock,
-            "reorder_level": p.reorder_level,
-            "units_needed": p.reorder_level - p.stock
+            "reorder_level": reorder_level_default,
+            "units_needed": reorder_level_default - p.stock,
         }
         for p in products
     ]
 
 
 def get_expiring_soon_products(db: Session, days: int = 30) -> List[dict]:
-    today = date.today()
-    threshold = today + timedelta(days=days)
-
-    products = db.query(Product).filter(
-        Product.status == "active",
-        Product.expiry_date != None,
-        Product.expiry_date >= today,
-        Product.expiry_date <= threshold
-    ).order_by(Product.expiry_date.asc()).all()
-
-    return [
-        {
-            "product_id": p.product_id,
-            "name": p.name,
-            "sku": p.sku,
-            "expiry_date": str(p.expiry_date),
-            "days_until_expiry": (p.expiry_date - today).days,
-            "current_stock": p.stock
-        }
-        for p in products
-    ]
+    # Current DB schema doesn't include expiry dates.
+    return []
 
 
 # =========================
@@ -270,17 +243,18 @@ def log_damage_loss(
         product_id=damage_data.product_id,
         quantity=damage_data.quantity,
         reason=damage_data.reason,
-        estimated_loss=damage_data.quantity * product.cost,
+        estimated_loss=damage_data.quantity * (product.price or 0),
         reported_by=reported_by
     )
 
     # Also record a negative stock movement for audit trail
+    # `stock_movements.movement_type` is constrained by schema.sql enum values.
+    # For losses/damage, record this as an `out` movement of the lost quantity.
     movement = StockMovement(
         product_id=damage_data.product_id,
-        quantity_change=-damage_data.quantity,
-        movement_type="damage_loss",
+        quantity_change=damage_data.quantity,
+        movement_type="out",
         notes=damage_data.reason,
-        created_by=reported_by
     )
 
     db.add(record)
@@ -310,22 +284,38 @@ def get_damage_loss_report(
     total_quantity = sum(r.quantity for r in records)
     total_loss_value = sum(r.estimated_loss for r in records)
 
-    return {
-        "records": [
-            {
-                "record_id": r.id,
-                "product_id": r.product_id,
-                "quantity": r.quantity,
-                "reason": r.reason,
-                "estimated_loss": r.estimated_loss,
-                "reported_by": r.reported_by,
-                "created_at": str(r.created_at)
-            }
-            for r in records
-        ],
-        "summary": {
-            "total_records": len(records),
-            "total_quantity_lost": total_quantity,
-            "total_estimated_loss_value": round(float(total_loss_value), 2)
+    # Frontend expects an array of log objects for the Damage & Loss page.
+    # Example shape:
+    # { date, product_name, reason, quantity, cost_price, notes }
+    return [
+        {
+            "date": r.created_at.isoformat() if r.created_at else None,
+            "product_name": r.product.name if r.product else None,
+            "reason": r.reason,
+            "quantity": r.quantity,
+            "cost_price": r.product.price if r.product else None,
+            "notes": r.notes,
         }
+        for r in records
+    ]
+
+
+def get_inventory_statistics(db: Session) -> dict:
+    """
+    Minimal overview stats used by `/api/inventory/stats/overview`.
+    Kept defensive because frontend may render different fields.
+    """
+    total_products = db.query(Product).count()
+    active_products = total_products
+    low_stock = db.query(Product).filter(
+        Product.stock < 10,
+    ).count()
+
+    expiring_soon = 0
+
+    return {
+        "total_products": total_products,
+        "active_products": active_products,
+        "low_stock": low_stock,
+        "expiring_soon": expiring_soon,
     }

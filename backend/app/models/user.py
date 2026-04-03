@@ -111,7 +111,6 @@ class Customer(Base):
     credit_limit = Column(DECIMAL(10, 2), default=0.0, nullable=False)
     credit_balance = Column(DECIMAL(10, 2), default=0.0, nullable=False)
     risk_level = Column(String(20), default="low", nullable=True)
-
     status = Column(String(20), default="active", nullable=False, index=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -134,11 +133,11 @@ class CreditTransaction(Base):
     customer_id = Column(
         Integer, ForeignKey("customers.customer_id", ondelete="CASCADE"), nullable=False, index=True
     )
-    sale_id = Column(Integer, ForeignKey("bills.bill_id"), nullable=True)
+    sale_id = Column(Integer, ForeignKey("bills.bill_id", ondelete="SET NULL"), nullable=True)
 
     amount = Column(DECIMAL(10, 2), nullable=False)
 
-    # type: debit (purchase/charge), credit (payment), credit_limit_change, credit_freeze, reversal
+    # type: credit (payment), payment (also used for credit records)
     type = Column(String(30), nullable=False, index=True)
 
     # status: pending, paid, overdue, waived
@@ -150,6 +149,7 @@ class CreditTransaction(Base):
 
     # Relationships
     customer = relationship("Customer", back_populates="credit_transactions")
+    sale = relationship("Sale", back_populates="credit_transactions")
 
 
 # =========================
@@ -167,10 +167,6 @@ class Expense(Base):
     category = Column(String(50), nullable=False)
     expense_date = Column(Date, nullable=False)
     note = Column(Text, nullable=True)
-    recurring = Column(Boolean, default=False, nullable=False)
-
-    created_by = Column(Integer, ForeignKey("users.user_id"), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 # =========================
@@ -191,15 +187,13 @@ class Supplier(Base):
 
     rating = Column(DECIMAL(2, 1), default=0.0, nullable=False)
     payment_terms = Column(Integer, default=30, nullable=False)
-
     status = Column(String(20), default="active", nullable=False, index=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    products = relationship("Product", back_populates="supplier")
-    payments = relationship("SupplierPayment", back_populates="supplier")
+    payments = relationship("SupplierPayment", back_populates="supplier", cascade="all, delete-orphan")
 
 
 # =========================

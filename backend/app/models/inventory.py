@@ -19,22 +19,16 @@ class StockMovement(Base):
     product_id = Column(
         Integer, ForeignKey("products.product_id", ondelete="CASCADE"), nullable=False
     )
-    quantity_change = Column(Integer, nullable=False)
+    # schema.sql uses `quantity` for the moved amount
+    quantity_change = Column(Integer, nullable=False, name="quantity")
 
     movement_type = Column(String(50), nullable=False, index=True)
-
-    previous_stock = Column(Integer, nullable=True)
-    new_stock = Column(Integer, nullable=True)
-    reference_id = Column(String(255), nullable=True)
-
-    notes = Column(Text, nullable=True)
-
-    created_by = Column(Integer, ForeignKey("users.user_id"), nullable=True)
+    # schema.sql uses `reason` for additional details
+    notes = Column(Text, nullable=True, name="reason")
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     # Relationships
-    product = relationship("Product", back_populates="stock_movements")
-    user = relationship("User")
+    product = relationship("Product")
 
 
 # =========================
@@ -42,21 +36,26 @@ class StockMovement(Base):
 # =========================
 class DamageLossRecord(Base):
     __tablename__ = "damage_loss_records"
-    id = Column(Integer, primary_key=True, index=True)
+    # schema.sql uses `record_id` as the primary key
+    id = Column(Integer, primary_key=True, index=True, name="record_id")
 
     product_id = Column(
         Integer, ForeignKey("products.product_id", ondelete="CASCADE"), nullable=False
     )
 
-    quantity = Column(Integer, nullable=False)
-    reason = Column(Text, nullable=False)
-    estimated_loss = Column(DECIMAL(10, 2), nullable=False)
+    # schema.sql uses `quantity_lost`
+    quantity = Column(Integer, nullable=False, name="quantity_lost")
+    # schema.sql uses `loss_type` (damaged/expired/theft/other) for this field
+    reason = Column(String(20), nullable=False, name="loss_type")
+    # schema.sql uses `loss_value` for the estimated monetary loss
+    estimated_loss = Column(DECIMAL(10, 2), nullable=True, name="loss_value")
 
-    notes = Column(Text, nullable=True)
+    # schema.sql uses `reason` text column for notes/details
+    notes = Column(Text, nullable=True, name="reason")
 
-    reported_by = Column(Integer, ForeignKey("users.user_id"), nullable=False)
+    reported_by = Column(Integer, ForeignKey("users.user_id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     # Relationships
-    product = relationship("Product", back_populates="damage_loss_records")
+    product = relationship("Product")
     user = relationship("User", back_populates="damage_loss_records")

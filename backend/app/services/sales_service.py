@@ -16,21 +16,16 @@ from app.models.user import Customer
 # =========================
 
 def search_products(db: Session, query: str) -> List[Product]:
+    # Current DB schema for `products` doesn't include `status`, `sku`, or `barcode`.
+    # Search by product name (and unit as a best-effort fallback).
     return db.query(Product).filter(
-        Product.status == "active",
-        (
-            Product.name.ilike(f"%{query}%") |
-            Product.sku.ilike(f"%{query}%") |
-            Product.barcode.ilike(f"%{query}%")
-        )
+        Product.name.ilike(f"%{query}%") |
+        Product.unit.ilike(f"%{query}%")
     ).limit(20).all()
 
 
 def get_product_by_id(db: Session, product_id: int) -> Optional[Product]:
-    return db.query(Product).filter(
-        Product.product_id == product_id,
-        Product.status == "active"
-    ).first()
+    return db.query(Product).filter(Product.product_id == product_id).first()
 
 
 # =========================
@@ -79,7 +74,9 @@ def create_sale(
             product_id=item.product_id,
             quantity=item.quantity,
             unit_price=item.unit_price,
-            total=round(item.unit_price * item.quantity, 2)
+            discount=item.discount or 0,
+            tax_amount=item.tax_amount or 0,
+            subtotal=item.subtotal
         )
         db.add(sale_item)
 

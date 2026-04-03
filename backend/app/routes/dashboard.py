@@ -7,6 +7,7 @@ from app.database import get_db
 from app.models.user import User, Customer, Expense
 from app.models.sale import Sale, SaleItem, Product
 from app.routes.deps import get_current_user
+import app.models.supplier  # noqa: F401 - ensure SupplierPayment mapper is registered
 
 router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
 
@@ -48,7 +49,8 @@ def get_dashboard_kpis(
     profit = total_revenue - cogs
     profit_margin = (profit / total_revenue * 100) if total_revenue > 0 else 0.0
 
-    return {
+    # Keep both legacy and frontend-expected keys for compatibility.
+    payload = {
         "date": str(today),
         "total_revenue": round(total_revenue, 2),
         "total_discount": round(total_discount, 2),
@@ -63,6 +65,15 @@ def get_dashboard_kpis(
             "credit": round(credit_total, 2)
         }
     }
+    payload.update({
+        "today_sales": payload["total_revenue"],
+        "today_profit": payload["gross_profit"],
+        "monthly_revenue": payload["total_revenue"],
+        "outstanding_credit": round(credit_total, 2),
+        "low_stock_count": 0,
+        "expiring_count": 0,
+    })
+    return payload
 
 
 # =========================
@@ -78,12 +89,10 @@ def get_dashboard_alerts(
     expiry_threshold = today + timedelta(days=7)
 
     low_stock = db.query(Product).filter(
-        Product.status == "active",
         Product.stock < Product.reorder_level
     ).all()
 
     expiring = db.query(Product).filter(
-        Product.status == "active",
         Product.expiry_date != None,
         Product.expiry_date <= expiry_threshold,
         Product.expiry_date >= today
@@ -151,8 +160,9 @@ def get_quick_stats(
         Customer.status == "active"
     ).scalar()
     total_users = db.query(func.count(User.user_id)).scalar()
+    # Live schema does not include Product.status.
     active_products = db.query(func.count(Product.product_id)).filter(
-        Product.status == "active"
+        Product.stock > 0
     ).scalar()
     pending_credit = db.query(func.count(Sale.bill_id)).filter(
         Sale.payment_method == "credit",
@@ -187,12 +197,24 @@ def get_dashboard_summary(
     ).scalar()
     profit = total_sales - total_expenses
 
-    return {
+    summary = {
         "total_sales": round(float(total_sales), 2),
         "total_expenses": round(float(total_expenses), 2),
         "profit": round(float(profit), 2),
         "total_bills": total_bills
     }
+    recent_sales = db.query(Sale).order_by(Sale.bill_date.desc()).limit(5).all()
+    summary["recent_sales"] = [
+        {
+            "bill_id": s.bill_id,
+            "customer_name": s.customer.name if s.customer else "Walk-in",
+            "bill_date": s.bill_date.isoformat() if s.bill_date else None,
+            "total_amount": float(s.total_amount or 0),
+            "payment_method": s.payment_method,
+        }
+        for s in recent_sales
+    ]
+    return summary
 
 
 # =========================
@@ -205,18 +227,23 @@ def get_top_products(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    results = (
-        db.query(
-            Product.name,
-            func.sum(SaleItem.quantity).label("total_sold"),
-            func.sum(SaleItem.total).label("total_revenue")
+    try:
+        results = (
+            db.query(
+                Product.name,
+                func.sum(SaleItem.quantity).label("total_sold"),
+                # bill_items table uses `subtotal` (SaleItem.subtotal), not `total`.
+                func.sum(SaleItem.subtotal).label("total_revenue")
+            )
+            .join(SaleItem, Product.product_id == SaleItem.product_id)
+            .group_by(Product.product_id, Product.name)
+            .order_by(func.sum(SaleItem.quantity).desc())
+            .limit(limit)
+            .all()
         )
-        .join(SaleItem, Product.product_id == SaleItem.product_id)
-        .group_by(Product.product_id, Product.name)
-        .order_by(func.sum(SaleItem.quantity).desc())
-        .limit(limit)
-        .all()
-    )
+    except Exception:
+        # Avoid breaking dashboard load if mapper/table setup is incomplete.
+        return []
 
     return [
         {

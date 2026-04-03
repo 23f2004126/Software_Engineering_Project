@@ -19,9 +19,7 @@ class ProductCreate(BaseModel):
     reorder_level: int = Field(default=10, ge=0)
     max_stock: int = Field(default=1000, ge=0)
     unit: Optional[str] = None
-    supplier_id: Optional[int] = None
     expiry_date: Optional[date] = None
-    manufactured_date: Optional[date] = None
     status: str = "active"
 
     @field_validator("cost")
@@ -61,9 +59,7 @@ class ProductUpdate(BaseModel):
     reorder_level: Optional[int] = Field(None, ge=0)
     max_stock: Optional[int] = Field(None, ge=0)
     unit: Optional[str] = None
-    supplier_id: Optional[int] = None
     expiry_date: Optional[date] = None
-    manufactured_date: Optional[date] = None
     status: Optional[str] = None
 
     @field_validator("expiry_date")
@@ -93,9 +89,7 @@ class ProductResponse(BaseModel):
     reorder_level: int = 10
     max_stock: int = 1000
     unit: Optional[str] = None
-    supplier_id: Optional[int] = None
     expiry_date: Optional[date] = None
-    manufactured_date: Optional[date] = None
     status: str
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

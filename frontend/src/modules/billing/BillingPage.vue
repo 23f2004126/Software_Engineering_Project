@@ -172,12 +172,12 @@ onMounted(() => {
       <div class="col-span-3 space-y-4">
         <!-- Search and filters -->
         <div class="space-y-3">
-          <Input 
-            :value="searchQuery" 
-            @input="handleSearchInput"
-            type="search" 
-            placeholder="Search products..." 
-            icon="search" 
+          <Input
+            :modelValue="searchQuery"
+            @update:modelValue="handleSearchInput"
+            type="search"
+            placeholder="Search products..."
+            icon="search"
           />
 
           <!-- Category chips -->

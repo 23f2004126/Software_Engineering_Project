@@ -64,7 +64,10 @@ export const useAuthStore = defineStore('auth', () => {
     if (authData) {
       try {
         const { user: userData, role: userRole, isAuthenticated: isAuth } = JSON.parse(authData)
+        // Backward compatibility: older sessions may store `id` instead of `user_id`.
         user.value = userData
+          ? { ...userData, user_id: userData.user_id || userData.id || null }
+          : null
         role.value = userRole
         isAuthenticated.value = isAuth
       } catch (e) {

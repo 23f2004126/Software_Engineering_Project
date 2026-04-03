@@ -1,8 +1,11 @@
 import axios from "axios";
 import { useAuthStore } from "../stores/authStore";
 
+const rawBaseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const normalizedBaseUrl = rawBaseUrl.replace(/\/+$/, "");
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: normalizedBaseUrl,
   headers: {
     "Content-Type": "application/json",
   },
@@ -12,8 +15,9 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const authStore = useAuthStore();
-    if (authStore.user?.user_id) {
-      config.headers["X-User-ID"] = authStore.user.user_id;
+    const userId = authStore.user?.user_id || authStore.user?.id;
+    if (userId) {
+      config.headers["X-User-ID"] = userId;
     }
     return config;
   },

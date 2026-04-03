@@ -14,6 +14,7 @@ from app.schemas.inventory import (
 from app.models.sale import Product
 from app.models.inventory import StockMovement, DamageLossRecord
 from app.services import inventory_service
+from app.models.user import Category
 
 router = APIRouter(prefix="/api/inventory", tags=["Inventory"])
 
@@ -40,7 +41,7 @@ def create_product(
     return response
 
 
-@router.get("", response_model=List[ProductResponse])
+@router.get("", response_model=List[dict])
 def get_products(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
@@ -58,17 +59,35 @@ def get_products(
         search=search
     )
 
-    response = []
-    for product in products:
-        product_resp = ProductResponse(**product.__dict__)
-        product_resp.profit_margin = inventory_service.calculate_profit_margin(product.price, product.cost)
-        product_resp.inventory_value = product.cost * product.stock
-        response.append(product_resp)
+    category_ids = [p.category_id for p in products if p.category_id is not None]
+    category_map = {}
+    if category_ids:
+        for c in db.query(Category).filter(Category.category_id.in_(category_ids)).all():
+            category_map[c.category_id] = c.category_name
 
-    return response
+    # Frontend expects fields like `cost_price`, `reorder_level`, `expiry_date`, `status`.
+    # Your current DB doesn't store those, so we provide safe defaults.
+    return [
+        {
+            "id": p.product_id,
+            "product_id": p.product_id,
+            "name": p.name,
+            "category_id": p.category_id,
+            "category": category_map.get(p.category_id),
+            "unit": p.unit,
+            "cost_price": 0,
+            "price": p.price,
+            "stock": p.stock,
+            "reorder_level": 10,
+            "max_stock": None,
+            "expiry_date": None,
+            "status": "active",
+        }
+        for p in products
+    ]
 
 
-@router.get("/{product_id}", response_model=ProductDetailResponse)
+@router.get("/{product_id}", response_model=dict)
 def get_product_detail(
     product_id: int,
     db: Session = Depends(get_db)
@@ -80,24 +99,38 @@ def get_product_detail(
     movements, _ = inventory_service.get_stock_movements_for_product(
         db, product_id, skip=0, limit=100
     )
-    movements_response = [StockMovementResponse(**m.__dict__) for m in movements]
+    category_name = None
+    if product.category_id is not None:
+        cat = db.query(Category).filter(Category.category_id == product.category_id).first()
+        category_name = cat.category_name if cat else None
 
-    low_stock = product.stock < product.reorder_level
-    expiring_soon = (
-        product.expiry_date and
-        product.expiry_date <= date_type.today() + timedelta(days=30)
-    )
-
-    response = ProductDetailResponse(
-        **product.__dict__,
-        stock_movements=movements_response,
-        low_stock_alert=low_stock,
-        expiring_soon_alert=expiring_soon
-    )
-    response.profit_margin = inventory_service.calculate_profit_margin(product.price, product.cost)
-    response.inventory_value = product.cost * product.stock
-
-    return response
+    # Provide the shape expected by frontend Add/Edit page.
+    return {
+        "product_id": product.product_id,
+        "id": product.product_id,
+        "name": product.name,
+        "category": category_name,
+        "category_id": product.category_id,
+        "unit": product.unit,
+        "cost_price": 0,
+        "selling_price": product.price,
+        "quantity": product.stock,
+        "reorder_level": 10,
+        "max_stock": None,
+        "expiry_date": None,
+        "status": "active",
+        "stock_movements": [
+            {
+                "movement_id": m.movement_id,
+                "product_id": m.product_id,
+                "movement_type": m.movement_type,
+                "quantity_change": m.quantity_change,
+                "notes": m.notes,
+                "created_at": m.created_at.isoformat() if m.created_at else None,
+            }
+            for m in movements
+        ],
+    }
 
 
 @router.put("/{product_id}", response_model=ProductResponse)
@@ -149,7 +182,6 @@ def adjust_stock(
         quantity_change=adjustment.quantity,
         movement_type="adjustment",
         notes=adjustment.reason,
-        created_by=current_user.user_id
     )
 
     if not success:
@@ -189,12 +221,12 @@ def get_stock_movements(
 # ALERTS & REPORTS
 # =========================
 
-@router.get("/alerts/low-stock", response_model=List[LowStockAlert])
+@router.get("/alerts/low-stock", response_model=List[dict])
 def get_low_stock_products(db: Session = Depends(get_db)):
     return inventory_service.get_low_stock_products(db)
 
 
-@router.get("/alerts/expiring-soon", response_model=List[ExpiryAlert])
+@router.get("/alerts/expiring-soon", response_model=List[dict])
 def get_expiring_soon(
     days: int = Query(30, ge=1, le=365),
     db: Session = Depends(get_db)
@@ -229,7 +261,7 @@ def get_product_by_barcode(barcode: str, db: Session = Depends(get_db)):
 @router.get("/value/total", response_model=InventoryValueResponse)
 def get_total_inventory_value(db: Session = Depends(get_db)):
     total_value = inventory_service.calculate_inventory_value(db)
-    products_count = db.query(Product).filter(Product.status == "active").count()
+    products_count = db.query(Product).count()
     avg_value = total_value / products_count if products_count > 0 else 0
 
     return InventoryValueResponse(
@@ -261,7 +293,7 @@ def log_damage_loss(
     return DamageLossResponse(**record.__dict__)
 
 
-@router.get("/damage-loss/report", response_model=DamageLossReport)
+@router.get("/damage-loss/report", response_model=List[dict])
 def get_damage_loss_report(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
@@ -290,7 +322,7 @@ def get_damage_loss_report(
         reason=reason
     )
 
-    return DamageLossReport(**report)
+    return report
 
 
 # =========================

@@ -106,15 +106,24 @@ def add_expense(
         category=data.category,
         note=data.note,
         expense_date=data.expense_date or date.today(),
-        recurring=data.recurring,
-        created_by=current_user.user_id
     )
 
     db.add(expense)
     db.commit()
     db.refresh(expense)
 
-    return expense
+    # DB schema currently does not store `recurring` / `created_by`,
+    # but the frontend expects them in the response.
+    return ExpenseResponse(
+        expense_id=expense.expense_id,
+        title=expense.title,
+        amount=expense.amount,
+        category=expense.category,
+        note=expense.note,
+        expense_date=expense.expense_date,
+        recurring=data.recurring,
+        created_by=current_user.user_id,
+    )
 
 
 # =========================
@@ -150,7 +159,20 @@ def get_expenses(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid end_date format (use YYYY-MM-DD)")
 
-    return query.order_by(Expense.expense_date.desc()).offset(skip).limit(limit).all()
+    expenses = query.order_by(Expense.expense_date.desc()).offset(skip).limit(limit).all()
+    return [
+        ExpenseResponse(
+            expense_id=e.expense_id,
+            title=e.title,
+            amount=e.amount,
+            category=e.category,
+            note=e.note,
+            expense_date=e.expense_date,
+            recurring=getattr(e, "recurring", False) or False,
+            created_by=getattr(e, "created_by", None),
+        )
+        for e in expenses
+    ]
 
 
 # =========================
@@ -173,12 +195,13 @@ def get_expense_summary(
         extract("year", Expense.expense_date) == target_year
     ).all()
 
-    total = sum(e.amount for e in current)
+    # Normalize numeric types (MySQL returns Decimal) so we can safely do arithmetic.
+    total = sum(float(e.amount) for e in current)
 
     category_map = {}
     for e in current:
         category_map.setdefault(e.category, {"total": 0.0, "count": 0})
-        category_map[e.category]["total"] += e.amount
+        category_map[e.category]["total"] += float(e.amount)
         category_map[e.category]["count"] += 1
 
     by_category = [
@@ -200,6 +223,7 @@ def get_expense_summary(
         extract("month", Expense.expense_date) == prev_month,
         extract("year", Expense.expense_date) == prev_year
     ).scalar() or 0.0
+    prev_total = float(prev_total)
 
     change_pct = (
         ((total - prev_total) / prev_total * 100) if prev_total > 0 else 0.0
@@ -240,20 +264,21 @@ def get_financial_report(
         func.date(Sale.bill_date) <= end,
         Sale.status == "completed"
     ).scalar() or 0.0
+    total_revenue = float(total_revenue)
 
     expenses_in_range = db.query(Expense).filter(
         Expense.expense_date >= start,
         Expense.expense_date <= end
     ).all()
 
-    total_expenses = sum(e.amount for e in expenses_in_range)
+    total_expenses = sum(float(e.amount) for e in expenses_in_range)
     net_profit = total_revenue - total_expenses
     profit_margin = (net_profit / total_revenue * 100) if total_revenue > 0 else 0.0
 
     category_map = {}
     for e in expenses_in_range:
         category_map.setdefault(e.category, {"total": 0.0, "count": 0})
-        category_map[e.category]["total"] += e.amount
+        category_map[e.category]["total"] += float(e.amount)
         category_map[e.category]["count"] += 1
 
     breakdown = [
@@ -270,8 +295,8 @@ def get_financial_report(
         from_date=start,
         to_date=end,
         total_revenue=round(float(total_revenue), 2),
-        total_expenses=round(total_expenses, 2),
-        net_profit=round(net_profit, 2),
+        total_expenses=round(float(total_expenses), 2),
+        net_profit=round(float(net_profit), 2),
         profit_margin_pct=round(profit_margin, 2),
         expense_breakdown=breakdown
     )

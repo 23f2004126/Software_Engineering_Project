@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from pydantic import BaseModel, field_validator, Field
 from typing import List, Optional
 from datetime import datetime, date
@@ -168,11 +169,16 @@ def get_supplier(
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
 
-    pending = db.query(SupplierPayment).filter(
-        SupplierPayment.supplier_id == supplier_id,
-        SupplierPayment.status == "pending"
-    ).all()
-    total_pending = sum(p.amount for p in pending)
+    # The current DB may not have `supplier_payments` table.
+    try:
+        pending = db.query(SupplierPayment).filter(
+            SupplierPayment.supplier_id == supplier_id,
+            SupplierPayment.status == "pending"
+        ).all()
+        total_pending = sum(p.amount for p in pending)
+    except (OperationalError, ProgrammingError):
+        pending = []
+        total_pending = Decimal("0.00")
 
     result = SupplierResponse.from_orm(supplier)
     result.pending_amount = total_pending
@@ -244,10 +250,13 @@ def get_pending_payments(
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
 
-    payments = db.query(SupplierPayment).filter(
-        SupplierPayment.supplier_id == supplier_id,
-        SupplierPayment.status == "pending"
-    ).order_by(SupplierPayment.due_date.asc()).all()
+    try:
+        payments = db.query(SupplierPayment).filter(
+            SupplierPayment.supplier_id == supplier_id,
+            SupplierPayment.status == "pending"
+        ).order_by(SupplierPayment.due_date.asc()).all()
+    except (OperationalError, ProgrammingError):
+        payments = []
 
     return payments
 
@@ -279,9 +288,13 @@ def record_supplier_payment(
         created_at=datetime.utcnow()
     )
 
-    db.add(payment)
-    db.commit()
-    db.refresh(payment)
+    try:
+        db.add(payment)
+        db.commit()
+        db.refresh(payment)
+    except (OperationalError, ProgrammingError):
+        # Table doesn't exist in the current DB.
+        raise HTTPException(status_code=501, detail="Supplier payments are not available in this database")
 
     return payment
 
@@ -317,4 +330,7 @@ def get_payment_history(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid end_date format")
 
-    return query.order_by(SupplierPayment.created_at.desc()).all()
+    try:
+        return query.order_by(SupplierPayment.created_at.desc()).all()
+    except (OperationalError, ProgrammingError):
+        return []

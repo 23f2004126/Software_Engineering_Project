@@ -53,24 +53,24 @@ class SaleItemCreate(BaseModel):
     unit_price: Decimal
     discount: Decimal = Decimal("0")
     tax_amount: Decimal = Decimal("0")
-    total: Decimal
+    subtotal: Decimal
     
-    @field_validator("total")
+    @field_validator("subtotal")
     @classmethod
-    def validate_total(cls, v, info):
+    def validate_subtotal(cls, v, info):
         if "quantity" in info.data and "unit_price" in info.data:
             quantity = info.data["quantity"]
             unit_price = info.data["unit_price"]
             discount = info.data.get("discount", Decimal("0"))
             tax_amount = info.data.get("tax_amount", Decimal("0"))
             
-            subtotal = Decimal(str(quantity)) * unit_price
-            calculated_total = subtotal - discount + tax_amount
+            base_subtotal = Decimal(str(quantity)) * unit_price
+            calculated_subtotal = base_subtotal - discount + tax_amount
             
-            if abs(v - calculated_total) > Decimal("0.01"):  # Allow for rounding
+            if abs(v - calculated_subtotal) > Decimal("0.01"):  # Allow for rounding
                 raise ValueError(
-                    f"Item total {v} does not match calculated total {calculated_total}. "
-                    f"Expected: {quantity} x {unit_price} - {discount} + {tax_amount} = {calculated_total}"
+                    f"Item subtotal {v} does not match calculated subtotal {calculated_subtotal}. "
+                    f"Expected: {quantity} x {unit_price} - {discount} + {tax_amount} = {calculated_subtotal}"
                 )
         return v                   
 
@@ -83,7 +83,7 @@ class SaleItemResponse(BaseModel):
     unit_price: Decimal
     discount: Decimal
     tax_amount: Decimal
-    total: Decimal                      
+    subtotal: Decimal                      
 
     class Config:
         from_attributes = True
