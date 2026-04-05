@@ -1,6 +1,6 @@
 from sqlalchemy import (
-    Column, Integer, String, ForeignKey, DateTime, Date, 
-    DECIMAL, Enum, Text
+    Column, Integer, String, ForeignKey, DateTime, Date,
+    DECIMAL, Enum, Text, Boolean
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -42,19 +42,21 @@ class User(Base):
     name = Column(String(100), nullable=False)
     email = Column(String(100), unique=True, nullable=False, index=True)
     password = Column(String(255), nullable=False)
-    phone = Column(String(20))
+    phone = Column(String(20), nullable=True)
 
-    role_id = Column(Integer, ForeignKey("roles.role_id"))
-    designation_id = Column(Integer, ForeignKey("designations.designation_id"))
+    role_id = Column(Integer, ForeignKey("roles.role_id"), nullable=True)
+    designation_id = Column(Integer, ForeignKey("designations.designation_id"), nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Relationships
     role = relationship("Role", back_populates="users")
     designation = relationship("Designation", back_populates="users")
 
     shifts = relationship("Shift", back_populates="user")
-    bills = relationship("Bill", back_populates="user")
+    bills = relationship("Sale", back_populates="user")
+    damage_loss_records = relationship("DamageLossRecord", back_populates="user")
 
 
 # =========================
@@ -63,185 +65,135 @@ class User(Base):
 class Shift(Base):
     __tablename__ = "shifts"
 
-    shift_id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.user_id"))
+    shift_id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
 
-    start_time = Column(DateTime)
-    end_time = Column(DateTime)
-    shift_date = Column(Date)
+    start_time = Column(DateTime, nullable=True)
+    end_time = Column(DateTime, nullable=True)
+    shift_date = Column(Date, nullable=True)
 
-    status = Column(Enum("active", "completed", "cancelled", name="shift_status"))
+    status = Column(
+        Enum("active", "completed", "cancelled", name="shift_status"),
+        default="active"
+    )
 
     user = relationship("User", back_populates="shifts")
 
 
 # =========================
-# CATEGORIES
+# CATEGORY
+# (kept here so routes that import from app.models.user still work;
+#  the same table is defined in sale.py — pick one canonical home.
+#  Routes in categories.py import Category from app.models.user.)
 # =========================
 class Category(Base):
     __tablename__ = "categories"
 
-    category_id = Column(Integer, primary_key=True)
+    category_id = Column(Integer, primary_key=True, index=True)
     category_name = Column(String(50), unique=True, nullable=False)
 
-    products = relationship("Product", back_populates="category")
-
 
 # =========================
-# PRODUCTS
-# =========================
-class Product(Base):
-    __tablename__ = "products"
-
-    product_id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False, index=True)
-
-    category_id = Column(Integer, ForeignKey("categories.category_id"))
-    unit = Column(String(20))
-    price = Column(DECIMAL(10, 2))
-    stock_quantity = Column(Integer, default=0)
-
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    category = relationship("Category", back_populates="products")
-    bill_items = relationship("BillItem", back_populates="product")
-
-
-# =========================
-# CUSTOMERS
+# CUSTOMER
+# FIX: was completely missing — imported by customers.py, transactions.py,
+#      sales.py, dashboard.py all via: from app.models.user import Customer
 # =========================
 class Customer(Base):
     __tablename__ = "customers"
 
-    customer_id = Column(Integer, primary_key=True)
-    name = Column(String(100))
-    phone = Column(String(20), index=True)
-    address = Column(Text)
-    credit_balance = Column(DECIMAL(10, 2), default=0)
+    customer_id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    phone = Column(String(20), nullable=True, index=True)
+    email = Column(String(100), nullable=True)
+    address = Column(Text, nullable=True)
+    city = Column(String(100), nullable=True)
+
+    credit_limit = Column(DECIMAL(10, 2), default=0.0, nullable=False)
+    credit_balance = Column(DECIMAL(10, 2), default=0.0, nullable=False)
+    risk_level = Column(String(20), default="low", nullable=True)
+    status = Column(String(20), default="active", nullable=False, index=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    bills = relationship("Bill", back_populates="customer")
-    transactions = relationship("CreditTransaction", back_populates="customer")
-
-
-# =========================
-# BILLS
-# =========================
-class Bill(Base):
-    __tablename__ = "bills"
-
-    bill_id = Column(Integer, primary_key=True)
-    customer_id = Column(Integer, ForeignKey("customers.customer_id"))
-    user_id = Column(Integer, ForeignKey("users.user_id"))
-
-    bill_date = Column(DateTime, default=datetime.utcnow)
-    total_amount = Column(DECIMAL(10, 2))
-
-    payment_method = Column(Enum("cash", "card", "upi", "credit", name="payment_method"))
-    status = Column(Enum("paid", "pending", "cancelled", name="bill_status"))
-
-    customer = relationship("Customer", back_populates="bills")
-    user = relationship("User", back_populates="bills")
-    items = relationship("BillItem", back_populates="bill", cascade="all, delete")
+    # Relationships
+    sales = relationship("Sale", back_populates="customer")
+    credit_transactions = relationship("CreditTransaction", back_populates="customer")
 
 
 # =========================
-# BILL ITEMS
-# =========================
-class BillItem(Base):
-    __tablename__ = "bill_items"
-
-    bill_item_id = Column(Integer, primary_key=True)
-    bill_id = Column(Integer, ForeignKey("bills.bill_id"))
-    product_id = Column(Integer, ForeignKey("products.product_id"))
-
-    quantity = Column(Integer)
-    price = Column(DECIMAL(10, 2))
-    subtotal = Column(DECIMAL(10, 2))
-
-    bill = relationship("Bill", back_populates="items")
-    product = relationship("Product", back_populates="bill_items")
-
-
-# =========================
-# CREDIT TRANSACTIONS
+# CREDIT TRANSACTION
+# FIX: was completely missing — imported by customers.py, transactions.py,
+#      and sales.py via: from app.models.user import CreditTransaction
 # =========================
 class CreditTransaction(Base):
     __tablename__ = "credit_transactions"
 
-    transaction_id = Column(Integer, primary_key=True)
-    customer_id = Column(Integer, ForeignKey("customers.customer_id"))
+    transaction_id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(
+        Integer, ForeignKey("customers.customer_id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sale_id = Column(Integer, ForeignKey("bills.bill_id", ondelete="SET NULL"), nullable=True)
 
-    amount = Column(DECIMAL(10, 2))
-    type = Column(Enum("credit", "payment", name="credit_type"))
-    transaction_date = Column(DateTime, default=datetime.utcnow)
-    note = Column(Text)
+    amount = Column(DECIMAL(10, 2), nullable=False)
 
-    customer = relationship("Customer", back_populates="transactions")
+    # type: credit (payment), payment (also used for credit records)
+    type = Column(String(30), nullable=False, index=True)
+
+    # status: pending, paid, overdue, waived
+    status = Column(String(20), default="pending", nullable=False, index=True)
+
+    note = Column(Text, nullable=True)
+    due_date = Column(Date, nullable=True)
+    transaction_date = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    # Relationships
+    customer = relationship("Customer", back_populates="credit_transactions")
+    sale = relationship("Sale", back_populates="credit_transactions")
 
 
 # =========================
-# EXPENSES
+# EXPENSE
+# FIX: was completely missing — imported by expenses.py and dashboard.py
+#      via: from app.models.user import Expense
 # =========================
 class Expense(Base):
     __tablename__ = "expenses"
 
-    expense_id = Column(Integer, primary_key=True)
-    title = Column(String(100))
-    amount = Column(DECIMAL(10, 2))
-    category = Column(String(50))
-    expense_date = Column(Date)
-    note = Column(Text)
+    expense_id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(100), nullable=False)
+    amount = Column(DECIMAL(10, 2), nullable=False)
+
+    category = Column(String(50), nullable=False)
+    expense_date = Column(Date, nullable=False)
+    note = Column(Text, nullable=True)
 
 
 # =========================
-# SUPPLIERS
+# SUPPLIER
+# FIX: was completely missing — imported by supplier.py route
+#      via: from app.models.user import Supplier
 # =========================
 class Supplier(Base):
     __tablename__ = "suppliers"
 
-    supplier_id = Column(Integer, primary_key=True)
-    name = Column(String(100))
-    phone = Column(String(20))
-    address = Column(Text)
+    supplier_id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    contact_person = Column(String(100), nullable=True)
+    phone = Column(String(20), nullable=False)
+    email = Column(String(100), nullable=True)
+    address = Column(Text, nullable=True)
+    city = Column(String(100), nullable=True)
+
+    rating = Column(DECIMAL(2, 1), default=0.0, nullable=False)
+    payment_terms = Column(Integer, default=30, nullable=False)
+    status = Column(String(20), default="active", nullable=False, index=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    purchases = relationship("PurchaseOrder", back_populates="supplier")
-
-
-# =========================
-# PURCHASE ORDERS
-# =========================
-class PurchaseOrder(Base):
-    __tablename__ = "purchase_orders"
-
-    purchase_id = Column(Integer, primary_key=True)
-    supplier_id = Column(Integer, ForeignKey("suppliers.supplier_id"))
-    product_id = Column(Integer, ForeignKey("products.product_id"))
-
-    quantity = Column(Integer)
-    price = Column(DECIMAL(10, 2))
-    total_cost = Column(DECIMAL(10, 2))
-    purchase_date = Column(Date)
-
-    supplier = relationship("Supplier", back_populates="purchases")
-
-
-# =========================
-# LOSS LOGS
-# =========================
-class LossLog(Base):
-    __tablename__ = "loss_logs"
-
-    loss_id = Column(Integer, primary_key=True)
-    product_id = Column(Integer, ForeignKey("products.product_id"))
-
-    quantity_lost = Column(Integer)
-    reason = Column(String(255))
-    loss_date = Column(Date)
+    # Relationships
+    payments = relationship("SupplierPayment", back_populates="supplier", cascade="all, delete-orphan")
 
 
 # =========================
@@ -250,14 +202,20 @@ class LossLog(Base):
 class MilkSubscriber(Base):
     __tablename__ = "milk_subscribers"
 
-    subscriber_id = Column(Integer, primary_key=True)
-    customer_id = Column(Integer, ForeignKey("customers.customer_id"), unique=True)
+    subscriber_id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(
+        Integer, ForeignKey("customers.customer_id"), unique=True, nullable=False
+    )
 
-    daily_quantity = Column(DECIMAL(5, 2))
-    price_per_liter = Column(DECIMAL(10, 2))
+    daily_quantity = Column(DECIMAL(5, 2), nullable=False)
+    price_per_liter = Column(DECIMAL(10, 2), nullable=False)
 
-    start_date = Column(Date)
-    status = Column(Enum("active", "inactive", name="subscriber_status"))
+    start_date = Column(Date, nullable=True)
+    status = Column(
+        Enum("active", "inactive", name="subscriber_status"),
+        default="active",
+        nullable=False
+    )
 
 
 # =========================
@@ -266,10 +224,12 @@ class MilkSubscriber(Base):
 class MilkDailyEntry(Base):
     __tablename__ = "milk_daily_entries"
 
-    entry_id = Column(Integer, primary_key=True)
-    subscriber_id = Column(Integer, ForeignKey("milk_subscribers.subscriber_id"))
-    delivered_by = Column(Integer, ForeignKey("users.user_id"))
+    entry_id = Column(Integer, primary_key=True, index=True)
+    subscriber_id = Column(
+        Integer, ForeignKey("milk_subscribers.subscriber_id"), nullable=False
+    )
+    delivered_by = Column(Integer, ForeignKey("users.user_id"), nullable=True)
 
-    entry_date = Column(Date)
-    quantity = Column(DECIMAL(5, 2))
-    amount = Column(DECIMAL(10, 2))
+    entry_date = Column(Date, nullable=False, index=True)
+    quantity = Column(DECIMAL(5, 2), nullable=False)
+    amount = Column(DECIMAL(10, 2), nullable=False)

@@ -39,15 +39,18 @@ const handleSubmit = async () => {
   isLoading.value = true
 
   try {
-    const res = await api.post('/auth/login', {
+    const res = await api.post('/api/auth/login', {
       email: email.value,
       password: password.value
     })
 
     const user = res.data.user
 
+    // ✅ Normalize role for frontend (admin and owner both go to dashboard)
+    const frontendRole = user.role === 'admin' ? 'owner' : user.role
+
     // ✅ Save in store
-    authStore.login(user, user.role)
+    authStore.login(user, frontendRole, user.id)
 
     // ✅ Optional: remember user
     if (rememberMe.value) {
@@ -62,10 +65,20 @@ const handleSubmit = async () => {
     }
 
   } catch (error) {
-    console.error(error)
+    console.error('Login error:', error)
+    console.error('Response data:', error.response?.data)
+    console.error('Status code:', error.response?.status)
 
-    errorMsg.value =
-      error.response?.data?.detail || 'Invalid email or password'
+    // Better error handling
+    if (error.response?.status === 401) {
+      errorMsg.value = 'Invalid email or password'
+    } else if (error.response?.data?.detail) {
+      errorMsg.value = error.response.data.detail
+    } else if (error.message === 'Network Error') {
+      errorMsg.value = 'Unable to connect to server. Please check if the backend is running.'
+    } else {
+      errorMsg.value = error.message || 'Login failed. Please try again.'
+    }
   } finally {
     isLoading.value = false
   }
@@ -249,7 +262,6 @@ const features = [
 
                   <!-- Submit Button -->
                   <button
-                    @click="handleSubmit"
                     :disabled="isLoading"
                     class="w-full px-4 py-2.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
                   >

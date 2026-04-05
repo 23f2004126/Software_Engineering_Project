@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import MainLayout from '../../layouts/MainLayout.vue'
 import Card from '../../components/ui/Card.vue'
 import Button from '../../components/ui/Button.vue'
@@ -8,14 +8,14 @@ import Table from '../../components/ui/Table.vue'
 import Modal from '../../components/ui/Modal.vue'
 import { formatCurrency } from '../../utils/currency.js'
 import { formatDate } from '../../utils/dateFormatter.js'
+import { inventoryService } from '../../services/apiService.js'
 
-const mockProducts = [
-  { id: 1, name: 'Amul Butter 100g', category: 'Dairy', cost: 48, stock: 14 },
-  { id: 2, name: 'Tata Salt 1kg', category: 'Grains', cost: 18, stock: 48 },
-  { id: 3, name: 'Aashirvaad Atta 5kg', category: 'Grains', cost: 240, stock: 2 },
-  { id: 4, name: 'Amul Curd 400g', category: 'Dairy', cost: 28, stock: 6 },
-  { id: 5, name: 'Britannia Bread', category: 'Bakery', cost: 35, stock: 12 },
-]
+const products = ref([])
+const damageLogs = ref([])
+const isLoadingProducts = ref(false)
+const isLoadingLogs = ref(false)
+const submitError = ref('')
+const loadError = ref('')
 
 const form = ref({
   productId: null,
@@ -29,25 +29,57 @@ const errors = ref({})
 const isSubmitting = ref(false)
 const logFilter = ref('7d')
 
-const mockLogs = [
-  { id: 1, product: 'Amul Butter 100g', quantity: 3, reason: 'expired', date: '2025-06-05', notes: 'Expired on Jun 3', cost: 48 },
-  { id: 2, product: 'Tata Salt 1kg', quantity: 1, reason: 'damaged', date: '2025-06-04', notes: 'Package torn', cost: 18 },
-  { id: 3, product: 'Britannia Bread', quantity: 2, reason: 'damaged', date: '2025-06-03', notes: 'Mold growth', cost: 35 },
-]
-
 const selectedProduct = computed(() => {
-  return mockProducts.find((p) => p.id === form.value.productId)
+  return products.value.find((p) => p.id === form.value.productId)
 })
 
 const remainingStock = computed(() => {
-  return (selectedProduct.value?.stock || 0) - form.value.quantity
+  return (selectedProduct.value?.quantity || 0) - form.value.quantity
 })
 
 const selectedProductName = computed(() => {
   return selectedProduct.value?.name || 'Select a product'
 })
 
-const handleSubmit = () => {
+const filteredLogs = computed(() => {
+  const now = new Date()
+  const logDate = new Date(form.value.date)
+  
+  return damageLogs.value.filter((log) => {
+    const logTime = new Date(log.date)
+    const daysDiff = Math.floor((now - logTime) / (1000 * 60 * 60 * 24))
+    
+    if (logFilter.value === '7d') return daysDiff <= 7
+    if (logFilter.value === '30d') return daysDiff <= 30
+    return true
+  })
+})
+
+const totalLost = computed(() => {
+  return filteredLogs.value.reduce((sum, log) => sum + (log.quantity * log.cost_price || 0), 0)
+})
+
+const loadData = async () => {
+  isLoadingProducts.value = true
+  isLoadingLogs.value = true
+  loadError.value = ''
+  
+  try {
+    const [productsData, logsData] = await Promise.all([
+      inventoryService.getProducts(),
+      inventoryService.getDamageLossReport()
+    ])
+    products.value = productsData
+    damageLogs.value = logsData
+  } catch (err) {
+    loadError.value = 'Failed to load data: ' + (err.message || 'Unknown error')
+  } finally {
+    isLoadingProducts.value = false
+    isLoadingLogs.value = false
+  }
+}
+
+const handleSubmit = async () => {
   errors.value = {}
 
   if (!form.value.productId) {
@@ -56,15 +88,28 @@ const handleSubmit = () => {
   if (form.value.quantity <= 0) {
     errors.value.quantity = 'Quantity must be greater than 0'
   }
-  if (form.value.quantity > (selectedProduct.value?.stock || 0)) {
+  if (form.value.quantity > (selectedProduct.value?.quantity || 0)) {
     errors.value.quantity = 'Exceeds available stock'
   }
 
   if (Object.keys(errors.value).length > 0) return
 
   isSubmitting.value = true
-  setTimeout(() => {
-    isSubmitting.value = false
+  submitError.value = ''
+  
+  try {
+    await inventoryService.logDamageLoss({
+      product_id: form.value.productId,
+      quantity: form.value.quantity,
+      reason: form.value.reason,
+      date: form.value.date,
+      notes: form.value.notes,
+    })
+    
+    // Reload logs
+    damageLogs.value = await inventoryService.getDamageLossReport()
+    
+    // Reset form
     form.value = {
       productId: null,
       quantity: 0,
@@ -72,17 +117,26 @@ const handleSubmit = () => {
       date: new Date().toISOString().split('T')[0],
       notes: '',
     }
-  }, 1000)
+  } catch (err) {
+    submitError.value = 'Failed to log loss: ' + (err.message || 'Unknown error')
+  } finally {
+    isSubmitting.value = false
+  }
 }
 
-const totalLost = computed(() => {
-  return mockLogs.reduce((sum, log) => sum + log.quantity * log.cost, 0)
+onMounted(() => {
+  loadData()
 })
 </script>
 
 <template>
   <MainLayout>
-    <div class="grid grid-cols-5 gap-6">
+    <!-- Error Alert -->
+    <div v-if="loadError" class="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+      {{ loadError }}
+    </div>
+
+    <div v-if="!isLoadingProducts && !isLoadingLogs" class="grid grid-cols-5 gap-6">
       <!-- LEFT: Entry Form -->
       <div class="col-span-2">
         <Card padding="lg">
@@ -94,6 +148,11 @@ const totalLost = computed(() => {
           </div>
 
           <form class="space-y-4" @submit.prevent="handleSubmit">
+            <!-- Submit Error -->
+            <div v-if="submitError" class="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              {{ submitError }}
+            </div>
+
             <!-- Product -->
             <div>
               <label class="block text-sm font-medium text-slate-700 mb-1">Product</label>
@@ -102,12 +161,12 @@ const totalLost = computed(() => {
                 class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
               >
                 <option :value="null">Select a product...</option>
-                <option v-for="product in mockProducts" :key="product.id" :value="product.id">
+                <option v-for="product in products" :key="product.id" :value="product.id">
                   {{ product.name }}
                 </option>
               </select>
               <p v-if="selectedProduct" class="text-xs text-slate-500 mt-1">
-                Stock: {{ selectedProduct.stock }} units
+                Stock: {{ selectedProduct.quantity }} units
               </p>
             </div>
 
@@ -214,13 +273,13 @@ const totalLost = computed(() => {
           <Table
             :columns="[
               { key: 'date', label: 'Date' },
-              { key: 'product', label: 'Product' },
+              { key: 'product_name', label: 'Product' },
               { key: 'reason', label: 'Reason' },
               { key: 'quantity', label: 'Qty' },
               { key: 'estValue', label: 'Est. Value' },
               { key: 'notes', label: 'Notes' },
             ]"
-            :rows="mockLogs"
+            :rows="filteredLogs"
             striped
           >
             <template #reason="{ value }">
@@ -236,7 +295,7 @@ const totalLost = computed(() => {
               </span>
             </template>
             <template #estValue="{ row }">
-              <span class="font-mono font-semibold">{{ formatCurrency(row.quantity * row.cost) }}</span>
+              <span class="font-mono font-semibold">{{ formatCurrency(row.quantity * (row.cost_price || 0)) }}</span>
             </template>
           </Table>
         </Card>
@@ -245,7 +304,7 @@ const totalLost = computed(() => {
         <div class="grid grid-cols-3 gap-4 mt-5">
           <Card class="bg-red-50 border-red-100">
             <p class="text-xs font-semibold text-red-400 uppercase">Total Items Lost</p>
-            <p class="font-mono text-2xl font-bold text-red-600 mt-2">{{ mockLogs.length }}</p>
+            <p class="font-mono text-2xl font-bold text-red-600 mt-2">{{ filteredLogs.length }}</p>
           </Card>
           <Card class="bg-red-50 border-red-100">
             <p class="text-xs font-semibold text-red-400 uppercase">Est. Value Lost</p>
@@ -253,9 +312,22 @@ const totalLost = computed(() => {
           </Card>
           <Card class="bg-red-50 border-red-100">
             <p class="text-xs font-semibold text-red-400 uppercase">Most Common</p>
-            <p class="font-mono text-2xl font-bold text-red-600 mt-2">Damaged</p>
+            <p class="font-mono text-2xl font-bold text-red-600 mt-2">
+              {{ filteredLogs.length > 0 ? (filteredLogs.reduce((acc, log) => {
+                if (!acc[log.reason]) acc[log.reason] = 0
+                acc[log.reason]++
+                return acc
+              }, {})[filteredLogs[0]?.reason] || 'N/A') : 'N/A' }}
+            </p>
           </Card>
         </div>
+      </div>
+    </div>
+
+    <!-- Loading State -->
+    <div v-else class="flex items-center justify-center h-96">
+      <div class="text-center">
+        <p class="text-slate-600">Loading inventory data...</p>
       </div>
     </div>
   </MainLayout>

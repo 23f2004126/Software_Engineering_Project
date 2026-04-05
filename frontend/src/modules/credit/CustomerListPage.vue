@@ -1,82 +1,18 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import MainLayout from '../../layouts/MainLayout.vue'
 import Card from '../../components/ui/Card.vue'
 import Button from '../../components/ui/Button.vue'
 import Input from '../../components/ui/Input.vue'
 import Modal from '../../components/ui/Modal.vue'
+import { customerService } from '../../services/apiService.js'
 
 const searchQuery = ref('')
 const selectedCity = ref('')
 const selectedStatus = ref('all')
-
-const customers = ref([
-  {
-    id: 1,
-    name: 'Prakash Mart',
-    email: 'prakash@mart.com',
-    phone: '9876543210',
-    city: 'Mumbai',
-    address: '123 Market Street, Mumbai',
-    totalCredit: 45000,
-    usedCredit: 38000,
-    status: 'active',
-    joinDate: '2024-01-15',
-    lastPurchase: '2025-06-05',
-  },
-  {
-    id: 2,
-    name: 'Super Market Chain',
-    email: 'info@supermarket.com',
-    phone: '9765432109',
-    city: 'Bangalore',
-    address: '456 Commercial Area, Bangalore',
-    totalCredit: 100000,
-    usedCredit: 92000,
-    status: 'active',
-    joinDate: '2023-05-10',
-    lastPurchase: '2025-06-04',
-  },
-  {
-    id: 3,
-    name: 'Local Store',
-    email: 'local@store.com',
-    phone: '9654321098',
-    city: 'Delhi',
-    address: '789 Retail Zone, Delhi',
-    totalCredit: 25000,
-    usedCredit: 5000,
-    status: 'active',
-    joinDate: '2024-03-22',
-    lastPurchase: '2025-06-05',
-  },
-  {
-    id: 4,
-    name: 'Premium Retailers',
-    email: 'premium@retailers.com',
-    phone: '9543210987',
-    city: 'Mumbai',
-    address: '321 Premium Zone, Mumbai',
-    totalCredit: 75000,
-    usedCredit: 0,
-    status: 'inactive',
-    joinDate: '2023-11-08',
-    lastPurchase: '2025-04-15',
-  },
-  {
-    id: 5,
-    name: 'City Convenience',
-    email: 'city@conv.com',
-    phone: '9432109876',
-    city: 'Hyderabad',
-    address: '654 City Center, Hyderabad',
-    totalCredit: 50000,
-    usedCredit: 22000,
-    status: 'active',
-    joinDate: '2024-02-18',
-    lastPurchase: '2025-06-03',
-  },
-])
+const customers = ref([])
+const loading = ref(false)
+const error = ref(null)
 
 const cities = computed(() => {
   return [...new Set(customers.value.map(c => c.city))]
@@ -106,7 +42,8 @@ const filteredCustomers = computed(() => {
 })
 
 const creditUtilization = (customer) => {
-  return Math.round((customer.usedCredit / customer.totalCredit) * 100)
+  if (customer.credit_limit <= 0) return 0
+  return Math.round((customer.credit_balance / customer.credit_limit) * 100)
 }
 
 const getCreditColor = (utilization) => {
@@ -127,26 +64,52 @@ const newCustomer = ref({
   email: '',
   phone: '',
   city: '',
-  totalCredit: 25000,
+  address: '',
+  credit_limit: 25000,
 })
 
-const handleAddCustomer = () => {
-  customers.value.push({
-    id: customers.value.length + 1,
-    ...newCustomer.value,
-    address: '',
-    usedCredit: 0,
-    status: 'active',
-    joinDate: new Date().toISOString().split('T')[0],
-    lastPurchase: new Date().toISOString().split('T')[0],
-  })
-  showAddModal.value = false
-  newCustomer.value = {
-    name: '',
-    email: '',
-    phone: '',
-    city: '',
-    totalCredit: 25000,
+// Load customers on mount
+onMounted(async () => {
+  await loadCustomers()
+})
+
+const loadCustomers = async () => {
+  loading.value = true
+  error.value = null
+  try {
+    const data = await customerService.getCustomers()
+    customers.value = data
+  } catch (err) {
+    error.value = err.message
+    console.error('Failed to load customers:', err)
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleAddCustomer = async () => {
+  try {
+    await customerService.createCustomer({
+      name: newCustomer.value.name,
+      email: newCustomer.value.email,
+      phone: newCustomer.value.phone,
+      city: newCustomer.value.city,
+      address: newCustomer.value.address,
+      credit_limit: newCustomer.value.credit_limit,
+    })
+    await loadCustomers()
+    showAddModal.value = false
+    newCustomer.value = {
+      name: '',
+      email: '',
+      phone: '',
+      city: '',
+      address: '',
+      credit_limit: 25000,
+    }
+  } catch (err) {
+    error.value = err.message
+    console.error('Failed to create customer:', err)
   }
 }
 </script>
@@ -179,13 +142,13 @@ const handleAddCustomer = () => {
         </Card>
         <Card padding="lg" class="text-center">
           <div class="text-3xl font-bold text-amber-600">
-            ₹{{ (customers.reduce((sum, c) => sum + c.usedCredit, 0) / 100000).toFixed(1) }}L
+            ₹{{ (customers.reduce((sum, c) => sum + (c.credit_balance || 0), 0) / 100000).toFixed(1) }}L
           </div>
           <p class="text-sm text-slate-600 mt-2">Total Credit Used</p>
         </Card>
         <Card padding="lg" class="text-center">
           <div class="text-3xl font-bold text-blue-600">
-            ₹{{ (customers.reduce((sum, c) => sum + c.totalCredit, 0) / 100000).toFixed(1) }}L
+            ₹{{ (customers.reduce((sum, c) => sum + c.credit_limit, 0) / 100000).toFixed(1) }}L
           </div>
           <p class="text-sm text-slate-600 mt-2">Total Credit Limit</p>
         </Card>
@@ -259,9 +222,9 @@ const handleAddCustomer = () => {
                   <div class="text-xs text-slate-400">{{ customer.phone }}</div>
                 </td>
                 <td class="px-6 py-4 text-slate-600">{{ customer.city }}</td>
-                <td class="px-6 py-4 font-semibold text-slate-900">₹{{ customer.totalCredit.toLocaleString() }}</td>
+                <td class="px-6 py-4 font-semibold text-slate-900">₹{{ customer.credit_limit.toLocaleString() }}</td>
                 <td class="px-6 py-4">
-                  <span class="font-semibold text-amber-600">₹{{ customer.usedCredit.toLocaleString() }}</span>
+                  <span class="font-semibold text-amber-600">₹{{ (customer.credit_balance || 0).toLocaleString() }}</span>
                 </td>
                 <td class="px-6 py-4">
                   <div :class="['inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold', getCreditBg(creditUtilization(customer))]">
@@ -270,10 +233,10 @@ const handleAddCustomer = () => {
                     </div>
                   </div>
                 </td>
-                <td class="px-6 py-4 text-slate-600">{{ customer.lastPurchase }}</td>
+                <td class="px-6 py-4 text-slate-600">{{ customer.created_at ? new Date(customer.created_at).toLocaleDateString() : 'N/A' }}</td>
                 <td class="px-6 py-4">
                   <span :class="['text-xs px-2.5 py-1 rounded-full font-semibold', customer.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700']">
-                    {{ customer.status }}
+                    {{ customer.status || 'active' }}
                   </span>
                 </td>
                 <td class="px-6 py-4">
@@ -309,7 +272,7 @@ const handleAddCustomer = () => {
           <div>
             <label class="block text-sm font-medium text-slate-700 mb-1">Credit Limit (₹)</label>
             <input
-              v-model.number="newCustomer.totalCredit"
+              v-model.number="newCustomer.credit_limit"
               type="number"
               placeholder="25000"
               class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"

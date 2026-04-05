@@ -1,16 +1,19 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import MainLayout from '../../layouts/MainLayout.vue'
 import Card from '../../components/ui/Card.vue'
 import Button from '../../components/ui/Button.vue'
 import Input from '../../components/ui/Input.vue'
 import { calcMargin, marginColor } from '../../utils/currency.js'
+import { inventoryService } from '../../services/apiService.js'
 
 const router = useRouter()
 const route = useRoute()
 
 const isEditMode = computed(() => !!route.params.id)
+const isLoading = ref(false)
+const error = ref('')
 
 const form = ref({
   name: '',
@@ -50,7 +53,33 @@ const isFormValid = computed(() => {
   )
 })
 
-const handleSave = () => {
+const loadProduct = async () => {
+  if (!isEditMode.value) return
+  
+  isLoading.value = true
+  error.value = ''
+  try {
+    const product = await inventoryService.getProductById(route.params.id)
+    form.value = {
+      name: product.name,
+      category: product.category || 'Dairy',
+      unit: product.unit || 'Piece',
+      costPrice: product.cost_price,
+      sellingPrice: product.selling_price,
+      stock: product.quantity,
+      reorderLevel: product.reorder_level,
+      expiryDate: product.expiry_date ? product.expiry_date.split('T')[0] : '',
+      hsnCode: product.hsn_code || '',
+      description: product.description || '',
+    }
+  } catch (err) {
+    error.value = 'Failed to load product: ' + (err.message || 'Unknown error')
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const handleSave = async () => {
   errors.value = {}
 
   if (!form.value.name) {
@@ -66,11 +95,39 @@ const handleSave = () => {
   if (Object.keys(errors.value).length > 0) return
 
   isSaving.value = true
-  setTimeout(() => {
-    isSaving.value = false
+  error.value = ''
+  
+  try {
+    const payload = {
+      name: form.value.name,
+      category: form.value.category,
+      unit: form.value.unit,
+      cost_price: form.value.costPrice,
+      selling_price: form.value.sellingPrice,
+      quantity: form.value.stock,
+      reorder_level: form.value.reorderLevel,
+      expiry_date: form.value.expiryDate || null,
+      hsn_code: form.value.hsnCode || null,
+      description: form.value.description || null,
+    }
+
+    if (isEditMode.value) {
+      await inventoryService.updateProduct(route.params.id, payload)
+    } else {
+      await inventoryService.createProduct(payload)
+    }
+    
     router.push('/inventory')
-  }, 1200)
+  } catch (err) {
+    error.value = 'Failed to save product: ' + (err.message || 'Unknown error')
+  } finally {
+    isSaving.value = false
+  }
 }
+
+onMounted(() => {
+  loadProduct()
+})
 </script>
 
 <template>
@@ -83,8 +140,18 @@ const handleSave = () => {
         {{ isEditMode ? 'Edit Product' : 'Add Product' }}
       </div>
 
+      <!-- Error Alert -->
+      <div v-if="error" class="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+        {{ error }}
+      </div>
+
+      <!-- Loading State -->
+      <Card v-if="isLoading && isEditMode" padding="lg" class="text-center">
+        <p class="text-slate-600">Loading product data...</p>
+      </Card>
+
       <!-- Form Card -->
-      <Card padding="lg">
+      <Card v-else padding="lg">
         <form class="space-y-6" @submit.prevent="handleSave">
           <!-- Product Name -->
           <div class="col-span-2">

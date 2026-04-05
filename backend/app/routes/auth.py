@@ -3,25 +3,25 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 
 from app.database import get_db
-from app.models.user import User
-from app.models.user import Role
-from app.models.user import Designation
+from app.models.user import User, Role, Designation
 from app.core.security import verify_password
 
-router = APIRouter(prefix="/auth", tags=["Authentication"])
+router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 
 # =========================
 # REQUEST SCHEMA
 # =========================
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
 
 # =========================
-# RESPONSE SCHEMA
+# RESPONSE SCHEMAS
 # =========================
+
 class UserResponse(BaseModel):
     id: int
     name: str
@@ -39,11 +39,11 @@ class LoginResponse(BaseModel):
 
 
 # =========================
-# LOGIN API
+# LOGIN
 # =========================
+
 @router.post("/login", response_model=LoginResponse)
 def login(data: LoginRequest, db: Session = Depends(get_db)):
-
     user = db.query(User).filter(User.email == data.email).first()
 
     if not user or not verify_password(data.password, user.password):
@@ -52,7 +52,6 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
             detail="Invalid email or password"
         )
 
-    # Fetch role & designation
     role = db.query(Role).filter(Role.role_id == user.role_id).first()
     designation = None
 

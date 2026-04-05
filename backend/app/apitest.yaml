@@ -1,0 +1,607 @@
+openapi: 3.0.3
+info:
+  title: Sonik Retail API
+  version: 2026-04-03
+  description: |
+    This spec is intentionally honest about current behavior:
+    - Stable endpoints that should return `200` in normal usage
+    - Known unstable endpoints that currently return `500` because of schema/response mismatches
+
+    Testing note:
+    Some protected endpoints may return `401`/`422` in local environments when
+    `X-User-ID` is missing or points to a user that does not exist.
+
+servers:
+  - url: http://localhost:8000
+    description: Local backend
+
+tags:
+  - name: Dashboard
+    description: KPIs and dashboard widgets used by the frontend home screen.
+  - name: Inventory
+    description: Inventory listing, alerts, valuation, and reports.
+  - name: Sales
+    description: Sales listing, product lookup for POS, and sales reporting.
+  - name: Customers
+    description: Customer list and credit-risk related views.
+  - name: Suppliers
+    description: Supplier records and payment history.
+  - name: Expenses
+    description: Expense listing and financial summaries.
+  - name: Transactions
+    description: Credit/aging transaction reporting.
+
+paths:
+  /api/dashboard/kpis:
+    get:
+      tags: [Dashboard]
+      summary: Get dashboard KPI payload
+      description: Returns daily KPI totals and payment-mode breakdown used in dashboard cards.
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+      responses:
+        "200":
+          description: KPI payload for current day
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardKpiResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/dashboard/summary:
+    get:
+      tags: [Dashboard]
+      summary: Get dashboard summary
+      description: Returns totals plus a recent-sales snippet for dashboard summary panels.
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+      responses:
+        "200":
+          description: Summary totals with recent sales
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/dashboard/sales-overview:
+    get:
+      tags: [Dashboard]
+      summary: Sales time-series overview
+      description: Returns date-wise sales aggregates for chart rendering.
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+        - in: query
+          name: days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 365
+            default: 30
+      responses:
+        "200":
+          description: Daily sales aggregate
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/inventory:
+    get:
+      tags: [Inventory]
+      summary: List inventory products
+      description: Basic product listing with optional pagination and search.
+      parameters:
+        - in: query
+          name: skip
+          schema: { type: integer, minimum: 0, default: 0 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 100 }
+        - in: query
+          name: search
+          schema: { type: string }
+      responses:
+        "200":
+          description: Product list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /api/inventory/stats/overview:
+    get:
+      tags: [Inventory]
+      summary: Inventory stats overview
+      description: Returns high-level inventory counters and computed overview stats.
+      responses:
+        "200":
+          description: Stats payload
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/inventory/value/total:
+    get:
+      tags: [Inventory]
+      summary: Total inventory value
+      description: Returns total inventory valuation and product counts.
+      responses:
+        "200":
+          description: Aggregate valuation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryValueResponse"
+
+  /api/inventory/alerts/low-stock:
+    get:
+      tags: [Inventory]
+      summary: Low stock alerts
+      description: Returns products considered low stock by backend thresholds.
+      responses:
+        "200":
+          description: Low-stock products
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object }
+
+  /api/inventory/alerts/expiring-soon:
+    get:
+      tags: [Inventory]
+      summary: Expiring soon alerts
+      description: Returns products approaching expiry within the requested day range.
+      parameters:
+        - in: query
+          name: days
+          schema: { type: integer, minimum: 1, maximum: 365, default: 30 }
+      responses:
+        "200":
+          description: Products expiring within day window
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object }
+
+  /api/inventory/damage-loss/report:
+    get:
+      tags: [Inventory]
+      summary: Damage/loss report
+      description: Returns damage/loss entries, optionally filtered by date range and reason.
+      parameters:
+        - in: query
+          name: start_date
+          schema: { type: string }
+        - in: query
+          name: end_date
+          schema: { type: string }
+        - in: query
+          name: reason
+          schema: { type: string }
+      responses:
+        "200":
+          description: Damage/loss records
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object }
+        "400":
+          description: Invalid date format
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              example:
+                detail: Invalid start_date format. Use ISO format.
+
+  /api/customers:
+    get:
+      tags: [Customers]
+      summary: List customers
+      description: Returns customer records for listing and selector usage.
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+      responses:
+        "200":
+          description: Customers list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/customers/risk-assessment:
+    get:
+      tags: [Customers]
+      summary: Customer risk assessment
+      description: Returns customer risk-level oriented payload for credit monitoring.
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+      responses:
+        "200":
+          description: Risk graded customers
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/suppliers:
+    get:
+      tags: [Suppliers]
+      summary: List suppliers
+      description: Returns all suppliers visible to the requesting user.
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+      responses:
+        "200":
+          description: Suppliers list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/suppliers/payment-history/all:
+    get:
+      tags: [Suppliers]
+      summary: Supplier payment history
+      description: Returns consolidated supplier payment history rows.
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+      responses:
+        "200":
+          description: Payment records
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/expenses:
+    get:
+      tags: [Expenses]
+      summary: List expenses
+      description: Returns raw expense entries.
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+      responses:
+        "200":
+          description: Expenses list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/expenses/summary:
+    get:
+      tags: [Expenses]
+      summary: Expenses summary by month/year
+      description: Returns grouped expense totals for the requested month and year.
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+        - in: query
+          name: month
+          schema: { type: integer, minimum: 1, maximum: 12 }
+        - in: query
+          name: year
+          schema: { type: integer, minimum: 2000 }
+      responses:
+        "200":
+          description: Monthly expense summary
+          content:
+            application/json:
+              schema: { type: object }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/expenses/financial-report:
+    get:
+      tags: [Expenses]
+      summary: Financial report over date range
+      description: Returns date-range based report for expense and financial tracking.
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+        - in: query
+          name: from_date
+          required: true
+          schema: { type: string, format: date }
+        - in: query
+          name: to_date
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Date-range financial report
+          content:
+            application/json:
+              schema: { type: object }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/sales:
+    get:
+      tags: [Sales]
+      summary: Sales history
+      description: Returns sales rows for billing history screens.
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+      responses:
+        "200":
+          description: Sales list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Sales]
+      summary: Create sale
+      description: Creates a sale from cart items. Known to fail in mismatched DB schemas.
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaleCreateRequest"
+      responses:
+        "200":
+          description: Sale created
+          content:
+            application/json:
+              schema: { type: object }
+        "400":
+          description: Validation/business rule failure
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "500":
+          description: Known DB schema mismatch in `bill_items`
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/sales/products/search:
+    get:
+      tags: [Sales]
+      summary: Product search for POS
+      description: Lightweight query endpoint used by live product search in billing UI.
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: Matching products
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object }
+        "422":
+          description: Missing/invalid query parameter
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/transactions/report/credit-aging:
+    get:
+      tags: [Transactions]
+      summary: Credit aging report
+      description: Returns aging buckets/rows for outstanding customer credits.
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+      responses:
+        "200":
+          description: Aging rows
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # Known unstable endpoints (documented intentionally for baseline testing)
+  /api/dashboard/alerts:
+    get:
+      tags: [Dashboard]
+      summary: Dashboard alerts (known failing)
+      description: |
+        Baseline-known failing endpoint.
+        Current code references fields that are not consistently present in the live schema.
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+      responses:
+        "500":
+          description: Model/DB mismatch for product/customer fields
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/dashboard/quick-stats:
+    get:
+      tags: [Dashboard]
+      summary: Quick stats (known failing)
+      description: |
+        Baseline-known failing endpoint.
+        Query filters and model fields can drift from live DB schema.
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+      responses:
+        "500":
+          description: Model/DB mismatch for customer fields
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/dashboard/top-products:
+    get:
+      tags: [Dashboard]
+      summary: Top products (known failing)
+      description: |
+        Baseline-known failing endpoint.
+        Aggregation/join logic is sensitive to `bill_items` schema mismatches.
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+      responses:
+        "500":
+          description: Sale item column mismatch in joins
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/sales/{bill_id}:
+    get:
+      tags: [Sales]
+      summary: Sale details by id (known failing on some records)
+      description: |
+        Returns sale details for a bill ID.
+        Can fail for records impacted by sale-item schema differences.
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+        - in: path
+          name: bill_id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Sale details
+          content:
+            application/json:
+              schema: { type: object }
+        "404":
+          description: Sale not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "500":
+          description: Sale item model mismatch in live DB
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/sales/daily/summary:
+    get:
+      tags: [Sales]
+      summary: Daily summary (known failing)
+      description: |
+        Baseline-known failing endpoint due to response-model key mismatch in current implementation.
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+        - in: query
+          name: date
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        "500":
+          description: Response model validation mismatch (`order_count` vs `transaction_count`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "400":
+          description: Invalid date format
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+components:
+  parameters:
+    XUserID:
+      in: header
+      name: X-User-ID
+      required: true
+      schema:
+        type: integer
+      description: Logged-in user ID expected by protected route dependencies.
+  responses:
+    Unauthorized:
+      description: Invalid or missing authentication header.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: Invalid or missing X-User-ID header
+  schemas:
+    ErrorResponse:
+      description: Generic error response wrapper used by current routes.
+      type: object
+      properties:
+        detail:
+          oneOf:
+            - type: string
+            - type: array
+              items: { type: object }
+    DashboardKpiResponse:
+      type: object
+      properties:
+        date: { type: string }
+        total_revenue: { type: number }
+        total_discount: { type: number }
+        total_tax: { type: number }
+        order_count: { type: integer }
+        average_order_value: { type: number }
+        gross_profit: { type: number }
+        profit_margin_pct: { type: number }
+        payment_breakdown:
+          type: object
+          additionalProperties: { type: number }
+    InventoryValueResponse:
+      type: object
+      properties:
+        total_inventory_value: { type: number }
+        number_of_products: { type: integer }
+        average_product_value: { type: number }
+    SaleItemInput:
+      type: object
+      required: [product_id, quantity, unit_price]
+      properties:
+        product_id: { type: integer }
+        quantity: { type: integer, minimum: 1 }
+        unit_price: { type: number, minimum: 0 }
+    SaleCreateRequest:
+      type: object
+      required: [payment_method, items]
+      properties:
+        customer_id: { type: integer, nullable: true }
+        payment_method:
+          type: string
+          enum: [cash, card, upi, credit]
+        discount_amount: { type: number, default: 0 }
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/SaleItemInput"
+

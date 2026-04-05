@@ -50,6 +50,10 @@ CREATE TABLE users (
     FOREIGN KEY (designation_id) REFERENCES designations(designation_id)
 );
 
+-- Insert default admin user
+INSERT INTO users (name, email, password, role_id) VALUES 
+('Admin', 'admin@example.com', '$2b$12$Bzho7Y2pNtq1si4a/w/Ew.XEczESPzlXXP91OoZ3wxr6DIcjDIjM6', 1);
+
 -- =========================
 -- SHIFTS TABLE
 -- =========================
@@ -79,14 +83,28 @@ CREATE TABLE products (
     product_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     category_id INT,
+    
+    -- Inventory tracking fields
+    sku VARCHAR(50) UNIQUE NULL,
+    barcode VARCHAR(100) UNIQUE NULL,
+    
     unit VARCHAR(20),
+    cost_price DECIMAL(10,2),
     price DECIMAL(10,2),
     stock_quantity INT DEFAULT 0,
+    
+    -- Extended inventory fields
+    reorder_level INT DEFAULT 10,
+    max_stock INT DEFAULT 100,
+    expiry_date DATE NULL,
+    status VARCHAR(20) DEFAULT 'active',
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
-    FOREIGN KEY (category_id) REFERENCES categories(category_id)
+    FOREIGN KEY (category_id) REFERENCES categories(category_id),
+    KEY idx_sku (sku),
+    KEY idx_barcode (barcode)
 );
 
 -- =========================
@@ -96,14 +114,19 @@ CREATE TABLE customers (
     customer_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100),
     phone VARCHAR(20),
+    email VARCHAR(100),
     address TEXT,
+    city VARCHAR(100),
+    credit_limit DECIMAL(10,2) DEFAULT 0,
     credit_balance DECIMAL(10,2) DEFAULT 0,
-
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    risk_level VARCHAR(20) DEFAULT 'low',
+    status VARCHAR(20) DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 -- =========================
--- BILLS TABLE
+-- BILLS TABLE (Sales)
 -- =========================
 CREATE TABLE bills (
     bill_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -112,16 +135,22 @@ CREATE TABLE bills (
 
     bill_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     total_amount DECIMAL(10,2),
+    discount_amount DECIMAL(10,2) DEFAULT 0,
+    tax_amount DECIMAL(10,2) DEFAULT 0,
 
     payment_method ENUM('cash','card','upi','credit'),
     status ENUM('paid','pending','cancelled'),
+    receipt_number VARCHAR(50) UNIQUE NOT NULL,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
     FOREIGN KEY (user_id) REFERENCES users(user_id)
 );
 
 -- =========================
--- BILL ITEMS TABLE
+-- BILL ITEMS TABLE (Sale Items)
 -- =========================
 CREATE TABLE bill_items (
     bill_item_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -129,7 +158,9 @@ CREATE TABLE bill_items (
     product_id INT,
 
     quantity INT,
-    price DECIMAL(10,2),
+    unit_price DECIMAL(10,2),
+    discount DECIMAL(10,2) DEFAULT 0,
+    tax_amount DECIMAL(10,2) DEFAULT 0,
     subtotal DECIMAL(10,2),
 
     FOREIGN KEY (bill_id) REFERENCES bills(bill_id) ON DELETE CASCADE,
@@ -137,18 +168,19 @@ CREATE TABLE bill_items (
 );
 
 -- =========================
--- CREDIT TRANSACTIONS
+-- TRANSACTIONS TABLE (Payment Tracking)
 -- =========================
-CREATE TABLE credit_transactions (
+CREATE TABLE transactions (
     transaction_id INT AUTO_INCREMENT PRIMARY KEY,
-    customer_id INT,
+    bill_id INT NOT NULL,
 
     amount DECIMAL(10,2),
-    type ENUM('credit','payment'),
-    transaction_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-    note TEXT,
+    payment_mode ENUM('cash','credit','upi'),
+    reference_no VARCHAR(100),
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-    FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+    FOREIGN KEY (bill_id) REFERENCES bills(bill_id) ON DELETE CASCADE
 );
 
 -- =========================
@@ -165,15 +197,44 @@ CREATE TABLE expenses (
 );
 
 -- =========================
+-- CREDIT TRANSACTIONS TABLE
+-- =========================
+CREATE TABLE credit_transactions (
+    transaction_id INT AUTO_INCREMENT PRIMARY KEY,
+    customer_id INT NOT NULL,
+    sale_id INT NULL,
+
+    amount DECIMAL(10,2) NOT NULL,
+    type ENUM('credit', 'payment') NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending',
+    
+    note TEXT,
+    due_date DATE,
+    transaction_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (customer_id) REFERENCES customers(customer_id) ON DELETE CASCADE,
+    FOREIGN KEY (sale_id) REFERENCES bills(bill_id) ON DELETE SET NULL,
+    
+    INDEX idx_customer (customer_id),
+    INDEX idx_transaction_date (transaction_date)
+);
+
+-- =========================
 -- SUPPLIERS TABLE
 -- =========================
 CREATE TABLE suppliers (
     supplier_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100),
+    contact_person VARCHAR(100),
     phone VARCHAR(20),
+    email VARCHAR(100),
     address TEXT,
-
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    city VARCHAR(100),
+    rating DECIMAL(2,1) DEFAULT 0.0,
+    payment_terms INT DEFAULT 30,
+    status VARCHAR(20) DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 -- =========================
@@ -195,17 +256,38 @@ CREATE TABLE purchase_orders (
 );
 
 -- =========================
--- LOSS LOGS
+-- STOCK MOVEMENTS TABLE
 -- =========================
-CREATE TABLE loss_logs (
-    loss_id INT AUTO_INCREMENT PRIMARY KEY,
+CREATE TABLE stock_movements (
+    movement_id INT AUTO_INCREMENT PRIMARY KEY,
     product_id INT,
-
-    quantity_lost INT,
+    
+    movement_type ENUM('in', 'out', 'adjustment', 'return') NOT NULL,
+    quantity INT NOT NULL,
     reason VARCHAR(255),
-    loss_date DATE,
 
-    FOREIGN KEY (product_id) REFERENCES products(product_id)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE
+);
+
+-- =========================
+-- DAMAGE/LOSS RECORDS TABLE
+-- =========================
+CREATE TABLE damage_loss_records (
+    record_id INT AUTO_INCREMENT PRIMARY KEY,
+    product_id INT NOT NULL,
+
+    quantity_lost INT NOT NULL,
+    loss_type ENUM('damaged', 'expired', 'theft', 'other') NOT NULL,
+    reason TEXT,
+    loss_value DECIMAL(10,2),
+    
+    reported_by INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE,
+    FOREIGN KEY (reported_by) REFERENCES users(user_id)
 );
 
 -- =========================
@@ -247,3 +329,6 @@ CREATE TABLE milk_daily_entries (
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_products_name ON products(name);
 CREATE INDEX idx_customers_phone ON customers(phone);
+CREATE INDEX idx_stock_movements_product ON stock_movements(product_id);
+CREATE INDEX idx_damage_loss_product ON damage_loss_records(product_id);
+CREATE INDEX idx_damage_loss_reporter ON damage_loss_records(reported_by);

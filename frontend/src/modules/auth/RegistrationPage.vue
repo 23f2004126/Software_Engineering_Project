@@ -118,13 +118,24 @@ const handleSubmit = async () => {
     return
   }
 
-  if (password.value.length < 6) {
-    errorMsg.value = 'Password must be at least 6 characters'
+  if (password.value.length < 8) {
+    errorMsg.value = 'Password must be at least 8 characters'
+    return
+  }
+
+  // Check for special character
+  if (!/[^a-zA-Z0-9]/.test(password.value)) {
+    errorMsg.value = 'Password must contain at least one special character (!@#$%^&*)'
     return
   }
 
   if (!phoneNo.value.trim()) {
     errorMsg.value = 'Please enter your phone number'
+    return
+  }
+
+  if (!/^\d{10}$/.test(phoneNo.value.trim())) {
+    errorMsg.value = 'Phone number must be exactly 10 digits'
     return
   }
 
@@ -137,7 +148,7 @@ const handleSubmit = async () => {
     isLoading.value = true
 
     // ✅ CALL BACKEND API
-    await api.post('/users/', {
+    await api.post('/api/users/register', {
       name: name.value,
       email: email.value,
       password: password.value,
@@ -159,12 +170,27 @@ const handleSubmit = async () => {
     }, 1500)
 
   } catch (error) {
-    console.error(error)
+    console.error('Registration error:', error)
+    console.error('Response data:', error.response?.data)
+    console.error('Status code:', error.response?.status)
 
-    if (error.response?.data?.detail) {
+    // Better error handling
+    if (error.response?.status === 400) {
+      errorMsg.value = error.response.data?.detail || 'Registration failed. Please check your input.'
+    } else if (error.response?.data?.detail) {
       errorMsg.value = error.response.data.detail
+    } else if (error.message === 'Network Error') {
+      errorMsg.value = 'Unable to connect to server. Please check if the backend is running.'
+    } else if (error.response?.status === 422) {
+      // Validation error from Pydantic
+      const errors = error.response.data?.detail
+      if (Array.isArray(errors)) {
+        errorMsg.value = errors.map(e => e.msg).join(', ')
+      } else {
+        errorMsg.value = 'Validation error. Please check your input.'
+      }
     } else {
-      errorMsg.value = 'Something went wrong. Please try again.'
+      errorMsg.value = error.message || 'Something went wrong. Please try again.'
     }
 
   } finally {
@@ -353,7 +379,6 @@ const features = [
 
                   <!-- Submit Button -->
                   <button
-                    @click="handleSubmit"
                     :disabled="isLoading"
                     class="w-full px-4 py-2.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
                   >
