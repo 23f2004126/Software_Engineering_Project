@@ -1,13 +1,11 @@
-import axios from 'axios'
+import api from '../utils/api'
 
 export const paymentService = {
-  createOrder(amount) {
-    return axios.post('/api/create-order', {
-      amount
-    })
+  createOrder(payload) {
+    return api.post('/api/create-order', payload)
   },
 
   verifyPayment(payload) {
-    return axios.post('/api/verify-payment', payload)
-  }
+    return api.post('/api/verify-payment', payload)
+  },
 }

@@ -435,6 +435,12 @@ class CategoryWrite(BaseModel):
     category_name: str
 
 
+class RazorpayOrderRequest(BaseModel):
+    amount: float = Field(gt=0)
+    receipt: Optional[str] = None
+    notes: Optional[dict] = None
+
+
 @app.on_event("startup")
 def startup_event() -> None:
     init_db()
@@ -1897,28 +1903,35 @@ def get_suppliers(db: Session = Depends(get_db)):
 
 
 
-# Razorpay client (ONLY ONCE)
-client = razorpay.Client(
-    auth=(os.getenv("RAZORPAY_KEY_ID"), os.getenv("RAZORPAY_KEY_SECRET"))
-)
+# Razorpay client helper
+def get_razorpay_client() -> razorpay.Client:
+    key_id = os.getenv("RAZORPAY_KEY_ID")
+    key_secret = os.getenv("RAZORPAY_KEY_SECRET")
+    if not key_id or not key_secret:
+        raise HTTPException(status_code=500, detail="Razorpay keys are not configured on the backend")
+    return razorpay.Client(auth=(key_id, key_secret))
 
 # -----------------------------
 # CREATE ORDER
 # -----------------------------
 @app.post("/api/create-order")
-def create_order(payload: dict):
-    amount = payload["amount"]
-
-    order = client.order.create({
-        "amount": int(amount * 100),  # rupees → paise
-        "currency": "INR",
-        "payment_capture": 1
-    })
+def create_order(payload: RazorpayOrderRequest):
+    client = get_razorpay_client()
+    order = client.order.create(
+        {
+            "amount": int(round(payload.amount * 100)),
+            "currency": "INR",
+            "payment_capture": 1,
+            "receipt": payload.receipt or f"rcpt_{uuid.uuid4().hex[:12]}",
+            "notes": payload.notes or {},
+        }
+    )
 
     return {
         "order_id": order["id"],
         "amount": order["amount"],
-        "currency": order["currency"]
+        "currency": order["currency"],
+        "key_id": os.getenv("RAZORPAY_KEY_ID"),
     }
 
 
@@ -1928,6 +1941,7 @@ def create_order(payload: dict):
 @app.post("/api/verify-payment")
 async def verify_payment(request: Request):
     try:
+        client = get_razorpay_client()
         data = await request.json()
 
         razorpay_order_id = data.get("razorpay_order_id")
@@ -1937,17 +1951,18 @@ async def verify_payment(request: Request):
         if not razorpay_order_id or not razorpay_payment_id or not razorpay_signature:
             raise HTTPException(status_code=400, detail="Missing payment fields")
 
-        # Verify signature (IMPORTANT SECURITY STEP)
-        client.utility.verify_payment_signature({
-            "razorpay_order_id": razorpay_order_id,
-            "razorpay_payment_id": razorpay_payment_id,
-            "razorpay_signature": razorpay_signature
-        })
+        client.utility.verify_payment_signature(
+            {
+                "razorpay_order_id": razorpay_order_id,
+                "razorpay_payment_id": razorpay_payment_id,
+                "razorpay_signature": razorpay_signature,
+            }
+        )
 
         return {
             "status": "success",
             "message": "Payment verified successfully",
-            "payment_id": razorpay_payment_id
+            "payment_id": razorpay_payment_id,
         }
 
     except razorpay.errors.SignatureVerificationError:

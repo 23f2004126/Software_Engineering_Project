@@ -7,6 +7,7 @@ import Button from '../../components/ui/Button.vue'
 import { formatCurrency } from '../../utils/currency.js'
 import { formatDate } from '../../utils/dateFormatter.js'
 import { salesService } from '../../services/apiService.js'
+import { downloadSaleReceiptPdf, openSalePrintView } from '../../utils/receipt.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -51,6 +52,18 @@ const reverseSale = async () => {
   }
 }
 
+const downloadPdf = () => {
+  if (bill.value) {
+    downloadSaleReceiptPdf(bill.value)
+  }
+}
+
+const printBill = () => {
+  if (bill.value) {
+    openSalePrintView(bill.value)
+  }
+}
+
 onMounted(() => {
   fetchBillDetails()
 })
@@ -67,11 +80,11 @@ onMounted(() => {
           {{ bill?.receipt_number || 'Loading...' }}
         </div>
         <div class="flex gap-3">
-          <Button variant="secondary" size="sm" disabled>
-            ðŸ–¨ Print
+          <Button variant="secondary" size="sm" :disabled="!bill" @click="printBill">
+            Print
           </Button>
-          <Button variant="secondary" size="sm" disabled>
-            â¬‡ PDF
+          <Button variant="secondary" size="sm" :disabled="!bill" @click="downloadPdf">
+            PDF
           </Button>
           <Button 
             v-if="bill?.status !== 'cancelled'"
