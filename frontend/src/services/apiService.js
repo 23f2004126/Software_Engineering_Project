@@ -108,7 +108,7 @@ export const salesService = {
    */
   async reverseSale(billId) {
     try {
-      const response = await api.post(`/api/sales/${billId}/reverse`, {})
+      const response = await api.post(`/api/sales/${billId}/reverse?reason=${encodeURIComponent('Reversed from UI')}`, {})
       return response.data
     } catch (error) {
       throw new Error(error.response?.data?.detail || 'Failed to reverse sale')
@@ -234,7 +234,7 @@ export const inventoryService = {
     try {
       const response = await api.post('/api/inventory/stock-adjustment', {
         product_id: productId,
-        quantity_change: quantityChange,
+        quantity: quantityChange,
         reason: reason
       })
       return response.data
@@ -364,7 +364,7 @@ export const customerService = {
   async createCustomer(customerData) {
     try {
       const response = await api.post('/api/customers', customerData)
-      return response.data
+      return this.normalizeCustomer(response.data)
     } catch (error) {
       throw new Error(error.response?.data?.detail || 'Failed to create customer')
     }
@@ -385,7 +385,7 @@ export const customerService = {
       if (options.search) params.append('search', options.search)
 
       const response = await api.get(`/api/customers?${params.toString()}`)
-      return response.data || []
+      return (response.data || []).map((customer) => this.normalizeCustomer(customer))
     } catch (error) {
       throw new Error(error.response?.data?.detail || 'Failed to fetch customers')
     }
@@ -399,7 +399,7 @@ export const customerService = {
   async getCustomer(customerId) {
     try {
       const response = await api.get(`/api/customers/${customerId}`)
-      return response.data
+      return this.normalizeCustomer(response.data)
     } catch (error) {
       throw new Error(error.response?.data?.detail || 'Failed to fetch customer')
     }
@@ -427,7 +427,7 @@ export const customerService = {
   async updateCustomer(customerId, customerData) {
     try {
       const response = await api.put(`/api/customers/${customerId}`, customerData)
-      return response.data
+      return this.normalizeCustomer(response.data)
     } catch (error) {
       throw new Error(error.response?.data?.detail || 'Failed to update customer')
     }
@@ -446,7 +446,7 @@ export const customerService = {
         credit_limit: creditLimit,
         reason: reason
       })
-      return response.data
+      return this.normalizeCustomer(response.data)
     } catch (error) {
       throw new Error(error.response?.data?.detail || 'Failed to update credit limit')
     }
@@ -497,6 +497,20 @@ export const customerService = {
       return response.data
     } catch (error) {
       throw new Error(error.response?.data?.detail || 'Failed to delete customer')
+    }
+  },
+
+  async addCustomer(customerData) {
+    return this.createCustomer(customerData)
+  },
+
+  normalizeCustomer(customer) {
+    if (!customer) return customer
+    return {
+      ...customer,
+      id: customer.id || customer.customer_id,
+      created_at: customer.created_at || null,
+      last_transaction_date: customer.last_transaction_date || customer.created_at || null,
     }
   }
 }
@@ -784,6 +798,92 @@ export const transactionService = {
 }
 
 /**
+ * MILK SUBSCRIBER API SERVICES
+ * Handles all milk-subscriber related API calls
+ */
+export const milkSubscriberService = {
+  async getSubscribers(options = {}) {
+    try {
+      const params = new URLSearchParams()
+
+      if (options.status) params.append('status', options.status)
+      if (options.search) params.append('search', options.search)
+
+      const response = await api.get(`/api/milk/subscribers?${params.toString()}`)
+      return response.data || []
+    } catch (error) {
+      throw new Error(error.response?.data?.detail || 'Failed to fetch subscribers')
+    }
+  },
+
+  async createSubscriber(subscriberData) {
+    try {
+      const response = await api.post('/api/milk/subscribers', subscriberData)
+      return response.data
+    } catch (error) {
+      throw new Error(error.response?.data?.detail || 'Failed to create subscriber')
+    }
+  },
+
+  async updateSubscriber(subscriberId, subscriberData) {
+    try {
+      const response = await api.put(`/api/milk/subscribers/${subscriberId}`, subscriberData)
+      return response.data
+    } catch (error) {
+      throw new Error(error.response?.data?.detail || 'Failed to update subscriber')
+    }
+  },
+
+  async getSubscriber(subscriberId) {
+    try {
+      const response = await api.get(`/api/milk/subscribers/${subscriberId}`)
+      return response.data
+    } catch (error) {
+      throw new Error(error.response?.data?.detail || 'Failed to fetch subscriber')
+    }
+  },
+
+  async deleteSubscriber(subscriberId) {
+    try {
+      const response = await api.delete(`/api/milk/subscribers/${subscriberId}`)
+      return response.data
+    } catch (error) {
+      throw new Error(error.response?.data?.detail || 'Failed to delete subscriber')
+    }
+  },
+
+  async getEntries(subscriberId, options = {}) {
+    try {
+      const params = new URLSearchParams()
+      if (options.month) params.append('month', options.month)
+      if (options.year) params.append('year', options.year)
+      const response = await api.get(`/api/milk/subscribers/${subscriberId}/entries?${params.toString()}`)
+      return response.data || []
+    } catch (error) {
+      throw new Error(error.response?.data?.detail || 'Failed to fetch milk entries')
+    }
+  },
+
+  async saveEntry(subscriberId, entryData) {
+    try {
+      const response = await api.post(`/api/milk/subscribers/${subscriberId}/entries`, entryData)
+      return response.data
+    } catch (error) {
+      throw new Error(error.response?.data?.detail || 'Failed to save milk entry')
+    }
+  },
+
+  async deleteEntry(subscriberId, entryId) {
+    try {
+      const response = await api.delete(`/api/milk/subscribers/${subscriberId}/entries/${entryId}`)
+      return response.data
+    } catch (error) {
+      throw new Error(error.response?.data?.detail || 'Failed to delete milk entry')
+    }
+  }
+}
+
+/**
  * DASHBOARD API SERVICES
  * Handles all dashboard data API calls
  */
@@ -947,6 +1047,7 @@ export default {
   sales: salesService,
   inventory: inventoryService,
   customer: customerService,
+  milkSubscriber: milkSubscriberService,
   supplier: supplierService,
   expense: expenseService,
   transaction: transactionService,

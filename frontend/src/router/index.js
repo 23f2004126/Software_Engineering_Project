@@ -150,6 +150,10 @@ const router = createRouter({
       component: () => import('../modules/reports/ReportsPage.vue'),
       meta: { requiresAuth: true, ownerOnly: true },
     },
+    {
+      path: '/suppliers/add',
+      component: () => import('../modules/suppliers/AddSupplierPage.vue')
+    }
   ],
 })
 

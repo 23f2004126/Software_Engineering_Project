@@ -7,11 +7,12 @@ import Button from '../../components/ui/Button.vue'
 import Input from '../../components/ui/Input.vue'
 import Modal from '../../components/ui/Modal.vue'
 import { formatCurrency } from '../../utils/currency.js'
-import { salesService } from '../../services/apiService.js'
-
+import { inventoryService, salesService } from '../../services/apiService.js'
+import { paymentService } from '../../services/payementService.js'
 const router = useRouter()
 
 const searchQuery = ref('')
+const selectedCategory = ref('All')
 const cartItems = ref([])
 const paymentMode = ref('cash')
 const discount = ref(0)
@@ -21,17 +22,87 @@ const selectedCustomer = ref(null)
 const customerSearch = ref('')
 const showCustomerDropdown = ref(false)
 const searchResults = ref([])
+const allProducts = ref([])
 const loading = ref(false)
 const submitting = ref(false)
 const error = ref('')
 const showSuccessModal = ref(false)
 const generatedBill = ref(null)
+const showQRModal = ref(false)
 
 // Computed properties
+const payWithRazorpay = async () => {
+  try {
+    if (cartItems.value.length === 0) {
+      error.value = "Cart is empty"
+      return
+    }
+
+    // 1. Create order from backend
+    const orderRes = await paymentService.createOrder(total.value)
+
+    const order = orderRes.data
+
+    // 2. Razorpay options
+    const options = {
+      key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+      amount: order.amount,
+      currency: order.currency,
+      name: "My Store",
+      description: "POS Payment",
+      order_id: order.order_id,
+
+      handler: async function (response) {
+        // 3. VERIFY PAYMENT IN BACKEND
+        const verifyRes = await paymentService.verifyPayment({
+          razorpay_order_id: response.razorpay_order_id,
+          razorpay_payment_id: response.razorpay_payment_id,
+          razorpay_signature: response.razorpay_signature
+        })
+
+        if (verifyRes.data.status === "success") {
+          alert("Payment Successful!")
+
+          // Generate bill after payment success
+          await generateBill()
+        }
+      },
+
+      prefill: {
+        name: selectedCustomer.value?.name || "",
+        email: selectedCustomer.value?.email || ""
+      },
+
+      theme: {
+        color: "#10b981"
+      }
+    }
+
+    // 4. OPEN RAZORPAY POPUP
+    const rzp = new window.Razorpay(options)
+    rzp.open()
+
+  } catch (err) {
+    console.error(err)
+    error.value = "Payment failed"
+  }
+}
+
+
+const selectPaymentMode = (mode) => {
+  paymentMode.value = mode
+
+  if (mode === 'upi' && cartItems.value.length > 0) {
+    showQRModal.value = true
+  }
+}
 const filteredProducts = computed(() => {
-  return searchResults.value.filter((p) =>
-    p.name.toLowerCase().includes(searchQuery.value.toLowerCase())
-  )
+  const source = searchQuery.value.trim().length >= 1 ? searchResults.value : allProducts.value
+  return source.filter((p) => {
+    const matchesSearch = p.name.toLowerCase().includes(searchQuery.value.toLowerCase())
+    const matchesCategory = selectedCategory.value === 'All' || p.category === selectedCategory.value
+    return matchesSearch && matchesCategory
+  })
 })
 
 const subtotal = computed(() => {
@@ -70,6 +141,19 @@ const searchProducts = async (query) => {
   } catch (err) {
     console.error('Product search error:', err)
     searchResults.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+const loadProducts = async () => {
+  try {
+    loading.value = true
+    const response = await inventoryService.getProducts({ limit: 200, status: 'active' })
+    allProducts.value = response || []
+  } catch (err) {
+    console.error('Initial product load error:', err)
+    allProducts.value = []
   } finally {
     loading.value = false
   }
@@ -117,7 +201,7 @@ const generateBill = async () => {
       unit_price: parseFloat(item.unit_price || item.price),
       discount: 0,
       tax_amount: ((item.unit_price || item.price) * item.quantity * 0.05),
-      subtotal: (item.unit_price || item.price) * item.quantity
+      subtotal: ((item.unit_price || item.price) * item.quantity) + (((item.unit_price || item.price) * item.quantity * 0.05))
     }))
 
     // Prepare sale data
@@ -161,8 +245,10 @@ const handleSearchInput = (value) => {
 }
 
 onMounted(() => {
-  // Load initial products or categories if needed
+  loadProducts()
 })
+
+
 </script>
 
 <template>
@@ -187,10 +273,11 @@ onMounted(() => {
               :key="cat"
               class="px-3 py-1.5 text-xs rounded-full whitespace-nowrap transition-colors"
               :class="
-                cat === 'All'
+                selectedCategory === cat
                   ? 'bg-emerald-100 text-emerald-700 font-medium'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               "
+              @click="selectedCategory = cat"
             >
               {{ cat }}
             </button>
@@ -198,8 +285,10 @@ onMounted(() => {
         </div>
 
         <!-- Product list / Autocomplete dropdown -->
-        <Card v-if="searchQuery.length >= 1 && filteredProducts.length > 0" class="max-h-64 overflow-y-auto">
-          <div class="space-y-2">
+        <Card class="max-h-64 overflow-y-auto">
+          <div v-if="loading" class="py-4 text-sm text-slate-500">Loading products...</div>
+          <div v-else-if="filteredProducts.length === 0" class="py-4 text-sm text-slate-500">No matching products found.</div>
+          <div v-else class="space-y-2">
             <button
               v-for="prod in filteredProducts"
               :key="prod.product_id"
@@ -207,7 +296,7 @@ onMounted(() => {
               @click="addToCart(prod)"
             >
               <p class="text-sm font-medium text-slate-900">{{ prod.name }}</p>
-              <p class="text-xs text-slate-500">₹{{ prod.price }} × {{ prod.stock_quantity }} in stock</p>
+              <p class="text-xs text-slate-500">₹{{ prod.price }} × {{ prod.stock ?? prod.quantity ?? 0 }} in stock</p>
             </button>
           </div>
         </Card>
@@ -328,7 +417,7 @@ onMounted(() => {
                   ? 'bg-emerald-50 border-2 border-emerald-500 text-emerald-600'
                   : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
               "
-              @click="paymentMode = mode"
+              @click="selectPaymentMode(mode)"
             >
               {{ mode.toUpperCase() }}
             </button>
@@ -400,6 +489,43 @@ onMounted(() => {
         <Button variant="primary" fullWidth @click="viewBillDetails">View Bill Details</Button>
       </div>
     </Modal>
+    <Modal v-if="showQRModal" @close="showQRModal = false">
+    <div class="text-center space-y-4">
+      
+      <h3 class="text-lg font-semibold text-slate-900">Scan & Pay (UPI)</h3>
+
+      <!-- QR Image -->
+      <div class="flex justify-center">
+        <img
+          src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=yourupi@bank&pn=Store&am={{ total }}"
+          alt="UPI QR"
+          class="rounded-lg border"
+        />
+      </div>
+
+      <p class="text-sm text-slate-600">
+        Amount: <span class="font-semibold">₹{{ formatCurrency(total) }}</span>
+      </p>
+
+      <div class="flex gap-2">
+        <Button variant="secondary" fullWidth @click="showQRModal = false">
+          Cancel
+        </Button>
+
+        <Button
+          variant="primary"
+          fullWidth
+          @click="
+            showQRModal = false;
+            generateBill();
+          "
+        >
+          Payment Done
+        </Button>
+      </div>
+
+    </div>
+  </Modal>
   </MainLayout>
 </template>
 
@@ -419,3 +545,6 @@ onMounted(() => {
   transform: translateY(-8px);
 }
 </style>
+
+
+

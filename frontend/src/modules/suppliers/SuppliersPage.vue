@@ -8,14 +8,14 @@ import Modal from '../../components/ui/Modal.vue'
 import { formatCurrency } from '../../utils/currency.js'
 import { formatDate } from '../../utils/dateFormatter.js'
 import { supplierService } from '../../services/apiService.js'
-
+import { useRouter } from 'vue-router'   // ✅ ADD THIS
 const suppliers = ref([])
 const loading = ref(false)
 const error = ref(null)
 const showAddModal = ref(false)
 const showPaymentPanel = ref(true)
 const expandedPayments = ref(new Set())
-
+const router = useRouter()              // ✅ ADD THIS
 const newSupplier = ref({
   name: '',
   contact_person: '',
@@ -83,6 +83,10 @@ const togglePaymentPanel = (id) => {
     expandedPayments.value.add(id)
   }
 }
+const goToAddSupplier = () => {
+  router.push('/suppliers/add')
+}
+
 </script>
 
 <template>
@@ -94,7 +98,7 @@ const togglePaymentPanel = (id) => {
           <h1 class="text-2xl font-bold text-slate-900">Suppliers</h1>
           <p class="text-sm text-slate-500 mt-1">Manage supplier relationships and pending payments</p>
         </div>
-        <Button variant="primary" @click="showAddModal = true">
+        <Button variant="primary" @click="goToAddSupplier">
           + Add Supplier
         </Button>
       </div>
@@ -215,7 +219,7 @@ const togglePaymentPanel = (id) => {
     <Modal v-model="showAddModal" title="Add New Supplier" size="md">
       <div class="space-y-4">
         <Input v-model="newSupplier.name" label="Supplier Name" placeholder="e.g., Fresh Farms Dairy" />
-        <Input v-model="newSupplier.contact" label="Contact Person" placeholder="e.g., Rajesh Kumar" />
+        <Input v-model="newSupplier.contact_person" label="Contact Person" placeholder="e.g., Rajesh Kumar" />
         <Input v-model="newSupplier.phone" label="Phone Number" placeholder="10-digit mobile number" />
         <Input v-model="newSupplier.email" label="Email" type="email" />
         <Input v-model="newSupplier.city" label="City" placeholder="e.g., Pune" />

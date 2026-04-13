@@ -224,7 +224,7 @@ const notificationColors = {
       <template v-else>
         <!-- Greeting -->
         <div class="flex items-center justify-between">
-          <h1 class="text-xl font-semibold text-slate-900">Good morning, Anjali 👋</h1>
+          <h1 class="text-xl font-semibold text-slate-900">Good morning, {{ authStore.user?.name || authStore.user?.username || 'User' }}  👋</h1>
           <div class="bg-slate-100 text-slate-600 text-sm rounded-full px-3 py-1.5 font-medium">
             {{ new Date().toLocaleDateString('en-IN', { weekday: 'long', month: 'short', day: 'numeric' }) }}
           </div>

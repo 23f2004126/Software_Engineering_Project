@@ -1,183 +1,238 @@
-# 🛠️ Project Setup Guide
+Here is your **FULL complete `README.md` (clean, properly structured, copy-paste ready, includes backend + frontend + everything):**
 
-This guide will help you set up both the backend (FastAPI + MySQL) and frontend (Vue + Vite) for this project.
+````md id="readme_full_sonik"
+# 🛒 Sonik Smart Retail Management System
+
+A modern **Vue 3 + Vite + FastAPI POS Retail System** for managing inventory, billing, suppliers, employees, credit, subscriptions, and Razorpay payments.
 
 ---
 
-# 📦 Prerequisites
+# ✨ Features
+
+## 🧑‍💼 Store Owner Panel
+- 📊 Dashboard (KPIs, revenue analytics)
+- 📦 Inventory Management (stock, expiry, damage tracking)
+- 💳 POS Billing System (fast checkout)
+- 💰 Credit Management
+- 🚚 Supplier Management
+- 📈 Finance Reports
+- 👨‍💼 Employee Management
+- 🥛 Milk Subscription System
+- 🤖 AI Insights Assistant
+
+---
+
+## 👷 Employee Panel
+- 🕒 Shift login/logout tracking
+- 📊 Daily sales summary
+- ⚠️ Low stock alerts
+- 📦 Inventory updates
+- 🧾 Billing system access
+
+---
+
+# ⚙️ Prerequisites
 
 Make sure you have installed:
 
-* Python (3.10+)
-* MySQL Server
-* Node.js & npm
-* Git
+- Node.js >= 16
+- npm >= 7
+- Python >= 3.8
+- Git
+- Backend server (FastAPI or Node)
 
 ---
 
-# 🗄️ Step 1: Setup MySQL Database
+# 📦 Project Setup
 
-1. Open MySQL CLI:
+---
+
+# 1️⃣ Clone Repository
 
 ```bash
-mysql -u root -p
-```
-
-2. Create database:
-
-```sql
-CREATE DATABASE shop_db;
-```
-
-3. Use the database:
-
-```sql
-USE shop_db;
-```
-
-4. Run schema file:
-
-```bash
-source backend/app/schema.sql;
-```
+git clone https://github.com/23f2004126/Software_Engineering_Project
+cd Software_Engineering_Project
+````
 
 ---
 
-# 🔐 Step 2: Create `.env` file
+# 🖥️ BACKEND SETUP (FastAPI)
 
-Inside the `backend` folder, create a `.env` file and add:
-
-```env
-DB_USER=root
-DB_PASSWORD=yourpassword
-DB_HOST=localhost
-DB_PORT=3306
-DB_NAME=shop_db
-```
-
----
-
-# 🧪 Step 3: Setup Backend (FastAPI)
-
-1. Navigate to backend folder:
+## 2️⃣ Create Virtual Environment
 
 ```bash
 cd backend
+
+python -m venv .venv
 ```
 
-2. Create virtual environment:
+---
+
+## 3️⃣ Activate Virtual Environment
+
+### Windows
 
 ```bash
-python -m venv venv
+.venv\Scripts\activate
 ```
 
-3. Activate virtual environment:
+### Mac / Linux
 
 ```bash
-venv\Scripts\activate
+source .venv/bin/activate
 ```
 
-4. Install dependencies:
+---
+
+## 4️⃣ Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-5. Run backend server:
+---
+
+## 5️⃣ Create `.env` file
+
+Create a file named `.env` inside `backend/` and add:
+
+```env
+DATABASE_URL=sqlite:///./data/storefront_v2.db
+ADMIN_EMAIL=admin@gmail.com
+ADMIN_PASSWORD=admin@123
+EMPLOYEE_EMAIL=employee@gmail.com
+EMPLOYEE_PASSWORD=employee@123
+RAZORPAY_KEY_ID=rzpxxxxxxxx
+RAZORPAY_KEY_SECRET=xxxxxhLmfn5fCR0UPLv
+```
+
+---
+
+## 6️⃣ Run Backend Server
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
 Backend will run at:
-👉 [http://127.0.0.1:8000](http://127.0.0.1:8000)
+
+```
+http://localhost:8000
+```
 
 ---
 
-# 🌐 Step 4: Setup Frontend (Vue + Vite)
+# 🎨 FRONTEND SETUP (Vue 3 + Vite)
 
-1. Open a new terminal
-
-2. Navigate to frontend folder:
+## 7️⃣ Move to frontend folder
 
 ```bash
 cd frontend
 ```
 
-3. Install dependencies:
+---
+
+## 8️⃣ Install dependencies
 
 ```bash
 npm install
 ```
 
-4. Run frontend:
+---
+
+## 9️⃣ Start frontend server
 
 ```bash
 npm run dev
 ```
 
 Frontend will run at:
-👉 [http://localhost:5173](http://localhost:5173)
 
----
-
-# ⚡ Step 5: Run Both Together
-
-You need **two terminals**:
-
-### Terminal 1 (Backend)
-
-```bash
-cd backend
-venv\Scripts\activate
-uvicorn app.main:app --reload
 ```
-
-### Terminal 2 (Frontend)
-
-```bash
-cd frontend
-npm install
-npm run dev
+http://localhost:5173
 ```
 
 ---
 
-# 📌 Notes
+# 🚀 RUN COMPLETE PROJECT
 
-* Make sure MySQL server is running
-* Do NOT commit `.env` file
-* Do NOT commit `venv/`
+After starting both backend and frontend:
 
----
-
-# 🚀 You're Ready!
-
-Now you can:
-
-* Register users
-* Login users
-* Connect frontend with backend APIs
+| Service  | URL                                            |
+| -------- | ---------------------------------------------- |
+| Frontend | [http://localhost:5173](http://localhost:5173) |
+| Backend  | [http://localhost:8000](http://localhost:8000) |
 
 ---
 
-# 🧑‍💻 Team Instructions
+# 📌 Tech Stack
 
-* Always pull latest code before starting work
-* Use feature branches for new features
-* Write proper commit messages
+## Frontend
+
+* Vue 3
+* Vite
+* Pinia (State Management)
+
+## Backend
+
+* FastAPI / Node.js
+* SQLite / PostgreSQL
+
+## Others
+
+* Razorpay Payment Gateway
+* REST APIs
 
 ---
 
-# 📞 Issues?
+# 🧪 Common Issues & Fixes
 
-If something doesn't work:
+## ❌ npm not found
 
-* Check MySQL is running
-* Check `.env` credentials
-* Check dependencies installed
+Install Node.js → [https://nodejs.org](https://nodejs.org)
 
 ---
 
-Happy Coding 🚀
+## ❌ Backend not starting
 
+Make sure virtual environment is activated
+
+---
+
+## ❌ Module not found error
+
+Run:
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+## ❌ CORS Error
+
+Ensure backend allows:
+
+```
+http://localhost:5173
+```
+
+---
+
+# 📈 Future Improvements
+
+* Docker support (one-command run)
+* Production deployment (Nginx + VPS)
+* Role-based authentication system
+* AI recommendation engine improvements
+* Mobile responsive UI improvements
+
+```
+
+---
+
+If you want next upgrade, I can also make:
+🚀 **:contentReference[oaicite:0]{index=0}**  
+🚀 **:contentReference[oaicite:1]{index=1}**  
+🚀 **:contentReference[oaicite:2]{index=2}**
+```
