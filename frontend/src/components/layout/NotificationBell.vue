@@ -1,80 +1,61 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { notificationService } from '../../services/apiService.js'
 
 const router = useRouter()
 const isOpen = ref(false)
+const notifications = ref([])
+const readNotificationIds = ref(new Set())
+const storageKey = 'sonik_notification_reads'
 
-const notifications = ref([
-  {
-    id: 1,
-    type: 'stock',
-    title: 'Low Stock Alert',
-    message: 'Amul Butter 100g — only 2 units left',
-    time: '5 min ago',
-    read: false,
-  },
-  {
-    id: 2,
-    type: 'credit',
-    title: 'Credit Overdue',
-    message: 'Ramesh Patil — ₹3,200 overdue 35 days',
-    time: '1 hr ago',
-    read: false,
-  },
-  {
-    id: 3,
-    type: 'expiry',
-    title: 'Expiry Warning',
-    message: 'Amul Curd 400g expires in 2 days',
-    time: '3 hrs ago',
-    read: false,
-  },
-  {
-    id: 4,
-    type: 'shift',
-    title: 'Shift Ended',
-    message: 'Ravi Kumar ended shift — 6h 45m',
-    time: 'Yesterday',
-    read: true,
-  },
-  {
-    id: 5,
-    type: 'stock',
-    title: 'Reorder Suggested',
-    message: 'Tata Salt 1kg hit reorder threshold',
-    time: 'Yesterday',
-    read: true,
-  },
-])
+const unreadCount = computed(() => notifications.value.filter((notification) => !notification.read).length)
 
-const unreadCount = computed(() => {
-  return notifications.value.filter((n) => !n.read).length
-})
-
-const markAllRead = () => {
-  notifications.value.forEach((n) => (n.read = true))
+function syncReadState(items) {
+  notifications.value = items.map((notification) => ({
+    ...notification,
+    read: readNotificationIds.value.has(notification.id),
+  }))
 }
 
-const getIconColor = (type) => {
+async function loadNotifications() {
+  try {
+    const items = await notificationService.getNotifications()
+    syncReadState(items)
+  } catch (error) {
+    console.error('Failed to load notifications:', error)
+  }
+}
+
+function markAllRead() {
+  notifications.value.forEach((notification) => {
+    readNotificationIds.value.add(notification.id)
+  })
+  localStorage.setItem(storageKey, JSON.stringify([...readNotificationIds.value]))
+  syncReadState(notifications.value)
+}
+
+function getIconColor(type) {
   const colors = {
     stock: { bg: 'bg-red-100', text: 'text-red-600' },
     credit: { bg: 'bg-amber-100', text: 'text-amber-600' },
     expiry: { bg: 'bg-amber-100', text: 'text-amber-600' },
-    shift: { bg: 'bg-blue-100', text: 'text-blue-600' },
   }
   return colors[type] || colors.stock
 }
 
-const handleClickOutside = (e) => {
+function handleClickOutside(event) {
   const trigger = document.querySelector('[data-notification-trigger]')
   const dropdown = document.querySelector('[data-notification-dropdown]')
-  if (trigger && !trigger.contains(e.target) && dropdown && !dropdown.contains(e.target)) {
+  if (trigger && !trigger.contains(event.target) && dropdown && !dropdown.contains(event.target)) {
     isOpen.value = false
   }
 }
 
 onMounted(() => {
+  const storedIds = JSON.parse(localStorage.getItem(storageKey) || '[]')
+  readNotificationIds.value = new Set(storedIds)
+  loadNotifications()
   document.addEventListener('click', handleClickOutside)
 })
 
@@ -85,7 +66,6 @@ onUnmounted(() => {
 
 <template>
   <div class="relative">
-    <!-- Trigger button -->
     <button
       data-notification-trigger
       class="w-10 h-10 rounded-xl hover:bg-slate-100 flex items-center justify-center relative transition-colors"
@@ -104,14 +84,12 @@ onUnmounted(() => {
       </div>
     </button>
 
-    <!-- Dropdown -->
     <Transition name="notification">
       <div
         v-show="isOpen"
         data-notification-dropdown
         class="absolute right-0 top-12 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 overflow-hidden flex flex-col max-h-96"
       >
-        <!-- Header -->
         <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
           <h3 class="font-semibold text-slate-900">Notifications</h3>
           <button class="text-xs text-emerald-600 hover:text-emerald-700 font-medium" @click="markAllRead">
@@ -119,15 +97,16 @@ onUnmounted(() => {
           </button>
         </div>
 
-        <!-- Notifications list -->
         <div class="overflow-y-auto flex-1">
+          <div v-if="notifications.length === 0" class="px-4 py-6 text-sm text-slate-500 text-center">
+            No notifications right now
+          </div>
           <div
             v-for="notification in notifications"
             :key="notification.id"
             class="flex items-start gap-3 px-4 py-3 border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors"
             :class="!notification.read ? 'bg-emerald-50/40' : ''"
           >
-            <!-- Icon -->
             <div
               class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
               :class="getIconColor(notification.type).bg"
@@ -137,24 +116,21 @@ onUnmounted(() => {
               </svg>
             </div>
 
-            <!-- Content -->
             <div class="flex-1 min-w-0">
               <p class="text-sm font-medium text-slate-900">{{ notification.title }}</p>
               <p class="text-xs text-slate-500 mt-0.5 line-clamp-2">{{ notification.message }}</p>
               <p class="text-xs text-slate-400 mt-1">{{ notification.time }}</p>
             </div>
 
-            <!-- Unread indicator -->
             <div v-if="!notification.read" class="w-2 h-2 bg-emerald-500 rounded-full flex-shrink-0 mt-2"></div>
           </div>
         </div>
 
-        <!-- Footer -->
-        <div 
-          @click="router.push('/notifications')"
+        <div
           class="px-4 py-3 border-t border-slate-100 text-center hover:bg-slate-50 cursor-pointer transition-colors flex-shrink-0"
+          @click="router.push('/notifications')"
         >
-          <p class="text-sm text-emerald-600 font-medium">View all notifications →</p>
+          <p class="text-sm text-emerald-600 font-medium">View all notifications</p>
         </div>
       </div>
     </Transition>

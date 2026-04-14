@@ -1795,6 +1795,99 @@ def dashboard_alerts(db: Session = Depends(get_db), _: User = Depends(get_curren
     }
 
 
+@app.get("/api/shifts/report")
+def shift_report(
+    report_date: Optional[str] = Query(None, alias="date"),
+    user_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    target_date = parse_iso_date(report_date) if report_date else date.today()
+    start_dt = datetime.combine(target_date, datetime.min.time())
+    end_dt = datetime.combine(target_date, datetime.max.time())
+    requested_user_id = current_user.user_id if current_user.role == "employee" else user_id
+
+    query = select(Sale).where(
+        Sale.bill_date >= start_dt,
+        Sale.bill_date <= end_dt,
+        Sale.user_id.is_not(None),
+    )
+    if requested_user_id:
+        query = query.where(Sale.user_id == requested_user_id)
+
+    rows = db.scalars(query.order_by(Sale.bill_date.asc())).all()
+    users = {row.user_id: row for row in db.scalars(select(User)).all()}
+
+    grouped: dict[tuple[int, str], dict] = {}
+    for sale in rows:
+        key = (sale.user_id, sale.bill_date.date().isoformat())
+        user = users.get(sale.user_id)
+        bucket = grouped.setdefault(
+            key,
+            {
+                "user_id": sale.user_id,
+                "employee": user.name if user else f"User {sale.user_id}",
+                "designation": user.designation if user else None,
+                "date": sale.bill_date.date().isoformat(),
+                "first_sale_at": sale.bill_date,
+                "last_sale_at": sale.bill_date,
+                "sales": 0.0,
+                "transactions": 0,
+            },
+        )
+        bucket["first_sale_at"] = min(bucket["first_sale_at"], sale.bill_date)
+        bucket["last_sale_at"] = max(bucket["last_sale_at"], sale.bill_date)
+        bucket["sales"] += as_float(sale.total_amount)
+        bucket["transactions"] += 1
+
+    reports = []
+    for index, bucket in enumerate(sorted(grouped.values(), key=lambda item: (item["date"], item["employee"]), reverse=True), start=1):
+        duration_minutes = max(int((bucket["last_sale_at"] - bucket["first_sale_at"]).total_seconds() // 60), 0)
+        performance = min(100, round((bucket["transactions"] * 12) + (bucket["sales"] / 250)))
+        anomaly = None
+        if bucket["transactions"] == 0:
+            anomaly = "No Sales"
+        elif bucket["sales"] < 1000:
+            anomaly = "Low Sales"
+
+        reports.append(
+            {
+                "id": index,
+                "user_id": bucket["user_id"],
+                "employee": bucket["employee"],
+                "designation": bucket["designation"],
+                "date": bucket["date"],
+                "start_time": bucket["first_sale_at"].strftime("%H:%M"),
+                "end_time": bucket["last_sale_at"].strftime("%H:%M"),
+                "duration_minutes": duration_minutes,
+                "sales": round(bucket["sales"], 2),
+                "transactions": bucket["transactions"],
+                "performance": performance,
+                "anomaly": anomaly,
+            }
+        )
+
+    if current_user.role == "employee" and not reports:
+        reports.append(
+            {
+                "id": 1,
+                "user_id": current_user.user_id,
+                "employee": current_user.name,
+                "designation": current_user.designation,
+                "date": target_date.isoformat(),
+                "start_time": None,
+                "end_time": None,
+                "duration_minutes": 0,
+                "sales": 0.0,
+                "transactions": 0,
+                "performance": 0,
+                "anomaly": "No Sales Yet",
+            }
+        )
+
+    return reports
+
+
 @app.get("/api/dashboard/quick-stats")
 def quick_stats(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     return {

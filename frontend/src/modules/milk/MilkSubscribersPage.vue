@@ -24,6 +24,11 @@ const newSubscriber = ref({
   phone: '',
   quantity: 0.5,
   frequency: 'daily',
+  start_date: new Date().toISOString().split('T')[0], // YYYY-MM-DD
+  status: 'active',
+  amount: 0,
+  address: '',
+  note: ''
 })
 
 const mockInvoices = [
@@ -44,12 +49,22 @@ const monthlyRevenue = computed(() => {
     .reduce((sum, s) => sum + Number(s.amount || s.quantity || 0) * 30, 0)
 })
 
+const closeAddModal = () => {
+  showAddModal.value = false
+  resetForm()
+}
+
 const resetForm = () => {
   newSubscriber.value = {
     name: '',
     phone: '',
     quantity: 0.5,
     frequency: 'daily',
+    start_date: new Date().toISOString().split('T')[0],
+    status: 'active',
+    amount: 0,
+    address: '',
+    note: ''
   }
 }
 
@@ -73,14 +88,25 @@ const handleAddSubscriber = async () => {
     errorMessage.value = 'Name and phone are required'
     return
   }
+  if (!Number.isFinite(Number(newSubscriber.value.quantity)) || Number(newSubscriber.value.quantity) <= 0) {
+    errorMessage.value = 'Daily quantity must be greater than 0'
+    return
+  }
 
   submitLoading.value = true
   try {
-    const created = await milkSubscriberService.createSubscriber({
+    const payload = {
       ...newSubscriber.value,
-      amount: newSubscriber.value.quantity,
-    })
-    subscribers.value = [created, ...subscribers.value]
+      name: newSubscriber.value.name.trim(),
+      phone: newSubscriber.value.phone.trim(),
+      quantity: Number(newSubscriber.value.quantity),
+      amount: Number(newSubscriber.value.amount || newSubscriber.value.quantity),
+      start_date: newSubscriber.value.start_date || new Date().toISOString().split('T')[0],
+      status: newSubscriber.value.status || 'active'
+    }
+
+    await milkSubscriberService.createSubscriber(payload)
+    await loadSubscribers()
     showAddModal.value = false
     successMessage.value = 'Subscriber added successfully'
     resetForm()
@@ -198,7 +224,7 @@ onMounted(loadSubscribers)
     </div>
 
     <Modal v-model="showAddModal" title="Add New Subscriber" size="md">
-      <div class="space-y-4">
+      <form class="space-y-4" @submit.prevent="handleAddSubscriber">
         <Input v-model="newSubscriber.name" label="Customer Name" placeholder="e.g., Rajesh Patel" />
         <Input v-model="newSubscriber.phone" label="Phone Number" placeholder="10-digit mobile number" />
         <div>
@@ -221,15 +247,22 @@ onMounted(loadSubscribers)
             <option value="alter">Alternate Days</option>
           </select>
         </div>
-      </div>
+        <Input v-model="newSubscriber.address" label="Address" placeholder="Customer address" />
+        <Input v-model="newSubscriber.note" label="Note" placeholder="Optional note" />
+      </form>
 
       <template #footer>
-        <Button variant="secondary" @click="showAddModal = false">
+        <Button variant="secondary" @click="closeAddModal">
           Cancel
         </Button>
-        <Button variant="primary" :disabled="submitLoading" @click="handleAddSubscriber">
+        <button
+          type="button"
+          :disabled="submitLoading"
+          class="font-medium rounded-xl transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          @click="handleAddSubscriber"
+        >
           {{ submitLoading ? 'Saving...' : 'Add Subscriber' }}
-        </Button>
+        </button>
       </template>
     </Modal>
 

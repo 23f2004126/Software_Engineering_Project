@@ -10,7 +10,9 @@ import Navbar from '../components/layout/Navbar.vue'
       <Navbar />
       <main class="flex-1 overflow-y-auto p-8">
         <Transition name="page">
-          <slot />
+          <div class="min-h-full">
+            <slot />
+          </div>
         </Transition>
       </main>
     </div>

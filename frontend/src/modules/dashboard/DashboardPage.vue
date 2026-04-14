@@ -201,6 +201,13 @@ const notificationColors = {
   warning: { bg: 'bg-amber-100', text: 'text-amber-600' },
   danger: { bg: 'bg-red-100', text: 'text-red-600' },
 }
+
+const queryConvertorCard = {
+  badge: 'Coming Soon',
+  title: 'Query Convertor',
+  description: 'Turn plain-language store questions into smart chatbot-ready queries from one focused dashboard entry point.',
+  highlights: ['Natural language', 'Retail-friendly prompts', 'Frontend ready for chatbot hookup'],
+}
 </script>
 
 <template>
@@ -227,6 +234,41 @@ const notificationColors = {
           <h1 class="text-xl font-semibold text-slate-900">Good morning, {{ authStore.user?.name || authStore.user?.username || 'User' }}  👋</h1>
           <div class="bg-slate-100 text-slate-600 text-sm rounded-full px-3 py-1.5 font-medium">
             {{ new Date().toLocaleDateString('en-IN', { weekday: 'long', month: 'short', day: 'numeric' }) }}
+          </div>
+        </div>
+
+        <div class="relative overflow-hidden rounded-3xl border border-emerald-200 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.18),_transparent_35%),linear-gradient(135deg,#f7fee7_0%,#ecfdf5_45%,#eff6ff_100%)] p-6 shadow-sm">
+          <div class="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-emerald-200/40 blur-2xl"></div>
+          <div class="absolute bottom-0 right-20 h-20 w-20 rounded-full bg-sky-200/40 blur-2xl"></div>
+          <div class="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div class="max-w-2xl">
+              <div class="inline-flex items-center rounded-full border border-emerald-300 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">
+                {{ queryConvertorCard.badge }}
+              </div>
+              <h2 class="mt-3 text-2xl font-bold text-slate-900">{{ queryConvertorCard.title }}</h2>
+              <p class="mt-2 text-sm leading-6 text-slate-600">{{ queryConvertorCard.description }}</p>
+              <div class="mt-4 flex flex-wrap gap-2">
+                <span
+                  v-for="highlight in queryConvertorCard.highlights"
+                  :key="highlight"
+                  class="rounded-full bg-white/80 px-3 py-1 text-xs font-medium text-slate-700 shadow-sm ring-1 ring-slate-200"
+                >
+                  {{ highlight }}
+                </span>
+              </div>
+            </div>
+            <div class="flex flex-col items-start gap-3 lg:items-end">
+              <button
+                type="button"
+                class="group inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/15 transition hover:-translate-y-0.5 hover:bg-emerald-600"
+              >
+                <span>Open Query Convertor</span>
+                <svg class="h-4 w-4 transition group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </button>
+              <p class="text-xs font-medium text-slate-500">Frontend preview only. We can wire the chatbot backend into this next.</p>
+            </div>
           </div>
         </div>
 

@@ -1,5 +1,50 @@
-import { useAuthStore } from '../stores/authStore'
 import api from '../utils/api'
+
+function formatNotificationTime() {
+  return 'Updated just now'
+}
+
+function buildNotificationsFromAlerts(alerts = {}) {
+  const notifications = []
+
+  for (const item of alerts.low_stock || []) {
+    notifications.push({
+      id: `low-stock-${item.product_id}`,
+      type: 'stock',
+      category: 'low-stock',
+      title: `Low Stock: ${item.name}`,
+      message: `Current stock ${item.current_stock}, reorder at ${item.reorder_level}`,
+      urgency: 'high',
+      time: formatNotificationTime(),
+    })
+  }
+
+  for (const item of alerts.expiring_soon || []) {
+    notifications.push({
+      id: `expiry-${item.product_id}`,
+      type: 'expiry',
+      category: 'expiry',
+      title: `Expiry Warning: ${item.name}`,
+      message: `${item.stock} units expire in ${item.days_left} day${item.days_left === 1 ? '' : 's'}`,
+      urgency: item.days_left <= 2 ? 'high' : 'medium',
+      time: formatNotificationTime(),
+    })
+  }
+
+  for (const customer of alerts.high_risk_customers || []) {
+    notifications.push({
+      id: `credit-${customer.customer_id}`,
+      type: 'credit',
+      category: 'credit',
+      title: `High Credit Risk: ${customer.name}`,
+      message: `${customer.usage_pct}% of credit limit used. Balance ${customer.credit_balance}`,
+      urgency: customer.usage_pct >= 90 ? 'high' : 'medium',
+      time: formatNotificationTime(),
+    })
+  }
+
+  return notifications
+}
 
 /**
  * SALES API SERVICES
@@ -528,7 +573,7 @@ export const supplierService = {
   async createSupplier(supplierData) {
     try {
       const response = await api.post('/api/suppliers', supplierData)
-      return response.data
+      return response.data?.supplier || response.data
     } catch (error) {
       throw new Error(error.response?.data?.detail || 'Failed to create supplier')
     }
@@ -967,6 +1012,33 @@ export const dashboardService = {
   }
 }
 
+export const notificationService = {
+  async getNotifications() {
+    try {
+      const response = await api.get('/api/dashboard/alerts')
+      return buildNotificationsFromAlerts(response.data)
+    } catch (error) {
+      throw new Error(error.response?.data?.detail || 'Failed to fetch notifications')
+    }
+  }
+}
+
+export const shiftReportService = {
+  async getShiftReports(options = {}) {
+    try {
+      const params = new URLSearchParams()
+      if (options.date) params.append('date', options.date)
+      if (options.userId) params.append('user_id', options.userId)
+
+      const query = params.toString()
+      const response = await api.get(`/api/shifts/report${query ? `?${query}` : ''}`)
+      return response.data || []
+    } catch (error) {
+      throw new Error(error.response?.data?.detail || 'Failed to fetch shift reports')
+    }
+  }
+}
+
 /**
  * CATEGORY API SERVICES
  * Handles all category-related API calls
@@ -1052,5 +1124,7 @@ export default {
   expense: expenseService,
   transaction: transactionService,
   dashboard: dashboardService,
-  category: categoryService
+  category: categoryService,
+  notification: notificationService,
+  shiftReport: shiftReportService
 }
