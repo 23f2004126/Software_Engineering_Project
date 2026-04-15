@@ -9,7 +9,7 @@ import RevenueExpenseChart from '../../components/charts/RevenueExpenseChart.vue
 import AIInsightCard from '../../components/ai/AIInsightCard.vue'
 import { formatCurrency } from '../../utils/currency.js'
 import { getIcon } from '../../utils/iconMap.js'
-import { dashboardService } from '../../services/apiService.js'
+import { dashboardService, mlInsightsService } from '../../services/apiService.js'
 
 const authStore = useAuthStore()
 
@@ -48,12 +48,14 @@ const loadDashboardData = async () => {
   loading.value = true
   error.value = null
   try {
-    const [kpisResult, alertsResult] = await Promise.allSettled([
+    const [kpisResult, alertsResult, mlResult] = await Promise.allSettled([
       dashboardService.getKPIs(),
-      dashboardService.getAlerts()
+      dashboardService.getAlerts(),
+      mlInsightsService.getAllInsights(),
     ])
     const kpis = kpisResult.status === 'fulfilled' ? kpisResult.value : null
     const alerts = alertsResult.status === 'fulfilled' ? alertsResult.value : null
+    const mlData = mlResult.status === 'fulfilled' ? mlResult.value : null
     
     // Update KPI cards with real data
     if (kpis) {
@@ -65,45 +67,39 @@ const loadDashboardData = async () => {
       kpiCards.value[5].value = kpis.expiring_count || 0
     }
     
-    // Map alerts to insights format
-    if (alerts && typeof alerts === 'object') {
-      const alertsArray = []
-      
+    // Start with ML insights (richer, model-driven)
+    const mlInsights = mlData?.insights || []
+
+    // Fallback: map basic alerts if ML returned nothing
+    const alertsArray = []
+    if (mlInsights.length === 0 && alerts && typeof alerts === 'object') {
       if (alerts.alert_counts?.low_stock > 0) {
         alertsArray.push({
-          type: 'warning',
-          icon: 'cube-transparent',
+          type: 'warning', icon: 'cube-transparent',
           title: `${alerts.alert_counts.low_stock} Items Low on Stock`,
           message: 'Some products are running low on inventory',
-          linkLabel: 'View',
-          linkRoute: '/inventory'
+          linkLabel: 'View', linkRoute: '/inventory'
         })
       }
-      
       if (alerts.alert_counts?.expiring_soon > 0) {
         alertsArray.push({
-          type: 'danger',
-          icon: 'hourglass',
+          type: 'danger', icon: 'hourglass',
           title: `${alerts.alert_counts.expiring_soon} Items Expiring Soon`,
           message: 'Some products are nearing their expiry date',
-          linkLabel: 'View',
-          linkRoute: '/inventory'
+          linkLabel: 'View', linkRoute: '/inventory'
         })
       }
-      
       if (alerts.alert_counts?.high_risk_customers > 0) {
         alertsArray.push({
-          type: 'danger',
-          icon: 'exclamation-triangle',
+          type: 'danger', icon: 'exclamation-triangle',
           title: `${alerts.alert_counts.high_risk_customers} High-Risk Customers`,
           message: 'Some customers have high credit utilization',
-          linkLabel: 'View',
-          linkRoute: '/customers'
+          linkLabel: 'View', linkRoute: '/customers'
         })
       }
-      
-      aiInsights.value = alertsArray
     }
+
+    aiInsights.value = mlInsights.length > 0 ? mlInsights : alertsArray
     
     // Load recent sales transactions
     try {

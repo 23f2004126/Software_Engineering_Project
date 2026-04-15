@@ -1128,3 +1128,59 @@ export default {
   notification: notificationService,
   shiftReport: shiftReportService
 }
+
+/**
+ * ML INSIGHTS API SERVICES
+ * Calls the 4 ML model endpoints for AI Insights on the dashboard.
+ */
+export const mlInsightsService = {
+  async getAllInsights() {
+    try {
+      const response = await api.get('/api/ml/all-insights')
+      return response.data
+    } catch (error) {
+      console.error('ML all-insights error:', error)
+      return { insights: [], details: {} }
+    }
+  },
+
+  async getSalesForecast() {
+    try {
+      const response = await api.get('/api/ml/sales-forecast')
+      return response.data
+    } catch (error) {
+      console.error('Sales forecast error:', error)
+      return { insights: [], summary: {}, forecast: [] }
+    }
+  },
+
+  async getInventoryInsights() {
+    try {
+      const response = await api.get('/api/ml/inventory-insights')
+      return response.data
+    } catch (error) {
+      console.error('Inventory insights error:', error)
+      return { insights: [], summary: {}, restock_recommendations: [] }
+    }
+  },
+
+  async getCashflowInsights() {
+    try {
+      const response = await api.get('/api/ml/cashflow-insights')
+      return response.data
+    } catch (error) {
+      console.error('Cashflow insights error:', error)
+      return { insights: [], summary: {}, anomaly_days: [] }
+    }
+  },
+
+  async getCreditRiskInsights() {
+    try {
+      const response = await api.get('/api/ml/credit-risk')
+      return response.data
+    } catch (error) {
+      console.error('Credit risk error:', error)
+      return { insights: [], summary: {}, high_risk_customers: [] }
+    }
+  },
+}

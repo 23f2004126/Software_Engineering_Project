@@ -34,6 +34,9 @@ from app.security import hash_password, verify_password
 
 app = FastAPI(title="Sonik Backend V2", version="2.0.0")
 
+from app.ml.router import router as ml_router
+app.include_router(ml_router)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
