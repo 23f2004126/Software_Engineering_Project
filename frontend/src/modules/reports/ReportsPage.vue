@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import MainLayout from '../../layouts/MainLayout.vue'
 import Card from '../../components/ui/Card.vue'
+import { downloadBusinessReportPdf } from '../../utils/reportDownload.js'
 
 const selectedReport = ref('daily')
 const dateRange = ref('last-7-days')
@@ -112,7 +113,9 @@ const reportDetails = computed(() => {
 })
 
 const downloadReport = (reportId) => {
-  alert(`Downloading report #${reportId}...`)
+  const report = reports.value.find(r => r.id === reportId)
+  if (!report) return
+  downloadBusinessReportPdf(report)
 }
 
 const viewDetails = (reportId) => {

@@ -1,0 +1,115 @@
+{
+  "meta": {
+    "project": "Software_Engineering_Project",
+    "source_definition_count": 80,
+    "unique_route_count": 78,
+    "protected_unique_routes": 54,
+    "public_unique_routes": 24,
+    "notes": [
+      "This file is JSON-formatted YAML so the milestone artifacts can be consumed without adding a PyYAML dependency.",
+      "The smoke suite uses this matrix as the route inventory for backend API coverage."
+    ]
+  },
+  "duplicate_route_keys": [
+    {
+      "method": "GET",
+      "path": "/api/suppliers",
+      "source_occurrences": 2
+    },
+    {
+      "method": "POST",
+      "path": "/api/suppliers",
+      "source_occurrences": 2
+    }
+  ],
+  "endpoints": [
+    {"id": "root", "method": "GET", "path": "/", "auth": false, "expected_statuses": [200]},
+    {"id": "health", "method": "GET", "path": "/health", "auth": false, "expected_statuses": [200]},
+    {"id": "auth_login", "method": "POST", "path": "/api/auth/login", "auth": false, "body_ref": "login_admin", "expected_statuses": [200]},
+    {"id": "users_register", "method": "POST", "path": "/api/users/register", "auth": false, "body_ref": "register_user", "expected_statuses": [200]},
+
+    {"id": "categories_list", "method": "GET", "path": "/api/categories", "auth": false, "expected_statuses": [200]},
+    {"id": "create_category", "method": "POST", "path": "/api/categories", "auth": true, "body_ref": "category_create", "expected_statuses": [200]},
+    {"id": "get_category", "method": "GET", "path": "/api/categories/{category_id}", "auth": false, "expected_statuses": [200]},
+    {"id": "update_category", "method": "PUT", "path": "/api/categories/{category_id}", "auth": true, "body_ref": "category_update", "expected_statuses": [200]},
+    {"id": "delete_category", "method": "DELETE", "path": "/api/categories/{category_id}", "auth": true, "expected_statuses": [200]},
+
+    {"id": "create_product", "method": "POST", "path": "/api/inventory", "auth": true, "body_ref": "product_create", "expected_statuses": [200]},
+    {"id": "inventory_list", "method": "GET", "path": "/api/inventory", "auth": false, "query_ref": "inventory_list", "expected_statuses": [200]},
+    {"id": "get_product", "method": "GET", "path": "/api/inventory/{product_id}", "auth": false, "expected_statuses": [200]},
+    {"id": "update_product", "method": "PUT", "path": "/api/inventory/{product_id}", "auth": true, "body_ref": "product_update", "expected_statuses": [200]},
+    {"id": "adjust_stock", "method": "POST", "path": "/api/inventory/stock-adjustment", "auth": true, "body_ref": "stock_adjustment", "expected_statuses": [200]},
+    {"id": "product_movements", "method": "GET", "path": "/api/inventory/{product_id}/movements", "auth": false, "query_ref": "inventory_movements", "expected_statuses": [200]},
+    {"id": "low_stock_alerts", "method": "GET", "path": "/api/inventory/alerts/low-stock", "auth": false, "expected_statuses": [200]},
+    {"id": "expiring_soon", "method": "GET", "path": "/api/inventory/alerts/expiring-soon", "auth": false, "query_ref": "expiring_soon", "expected_statuses": [200]},
+    {"id": "inventory_value", "method": "GET", "path": "/api/inventory/value/total", "auth": false, "expected_statuses": [200]},
+    {"id": "damage_loss", "method": "POST", "path": "/api/inventory/damage-loss", "auth": true, "body_ref": "damage_loss", "expected_statuses": [200]},
+    {"id": "damage_loss_report", "method": "GET", "path": "/api/inventory/damage-loss/report", "auth": false, "expected_statuses": [200]},
+    {"id": "inventory_stats", "method": "GET", "path": "/api/inventory/stats/overview", "auth": false, "expected_statuses": [200]},
+
+    {"id": "sales_product_search", "method": "GET", "path": "/api/sales/products/search", "auth": false, "query_ref": "sales_product_search", "expected_statuses": [200]},
+    {"id": "sales_product_detail", "method": "GET", "path": "/api/sales/products/{product_id}", "auth": false, "expected_statuses": [200]},
+    {"id": "sales_product_barcode", "method": "GET", "path": "/api/sales/products/barcode/{barcode}", "auth": false, "expected_statuses": [200]},
+    {"id": "sales_daily_summary", "method": "GET", "path": "/api/sales/daily/summary", "auth": true, "query_ref": "sales_daily_summary", "expected_statuses": [200]},
+    {"id": "create_sale", "method": "POST", "path": "/api/sales", "auth": true, "body_ref": "sale_create", "expected_statuses": [200]},
+    {"id": "sales_list", "method": "GET", "path": "/api/sales", "auth": true, "query_ref": "sales_list", "expected_statuses": [200]},
+    {"id": "get_sale", "method": "GET", "path": "/api/sales/{bill_id}", "auth": true, "expected_statuses": [200]},
+    {"id": "reverse_sale", "method": "POST", "path": "/api/sales/{bill_id}/reverse", "auth": true, "query_ref": "sale_reverse", "expected_statuses": [200]},
+    {"id": "delete_product", "method": "DELETE", "path": "/api/inventory/{product_id}", "auth": true, "expected_statuses": [200]},
+
+    {"id": "milk_subscribers_list", "method": "GET", "path": "/api/milk/subscribers", "auth": true, "expected_statuses": [200]},
+    {"id": "create_milk_subscriber", "method": "POST", "path": "/api/milk/subscribers", "auth": true, "body_ref": "milk_subscriber_create", "expected_statuses": [200]},
+    {"id": "get_milk_subscriber", "method": "GET", "path": "/api/milk/subscribers/{subscriber_id}", "auth": true, "expected_statuses": [200]},
+    {"id": "update_milk_subscriber", "method": "PUT", "path": "/api/milk/subscribers/{subscriber_id}", "auth": true, "body_ref": "milk_subscriber_update", "expected_statuses": [200]},
+    {"id": "milk_entries_list", "method": "GET", "path": "/api/milk/subscribers/{subscriber_id}/entries", "auth": true, "query_ref": "milk_entries", "expected_statuses": [200]},
+    {"id": "create_milk_entry", "method": "POST", "path": "/api/milk/subscribers/{subscriber_id}/entries", "auth": true, "body_ref": "milk_entry_upsert", "expected_statuses": [200]},
+    {"id": "delete_milk_entry", "method": "DELETE", "path": "/api/milk/subscribers/{subscriber_id}/entries/{entry_id}", "auth": true, "expected_statuses": [200]},
+    {"id": "delete_milk_subscriber", "method": "DELETE", "path": "/api/milk/subscribers/{subscriber_id}", "auth": true, "expected_statuses": [200]},
+
+    {"id": "create_customer", "method": "POST", "path": "/api/customers", "auth": true, "body_ref": "customer_create", "expected_statuses": [200]},
+    {"id": "customers_list", "method": "GET", "path": "/api/customers", "auth": true, "query_ref": "customers_list", "expected_statuses": [200]},
+    {"id": "customers_risk_assessment", "method": "GET", "path": "/api/customers/risk-assessment", "auth": true, "expected_statuses": [200]},
+    {"id": "get_customer", "method": "GET", "path": "/api/customers/{customer_id}", "auth": true, "expected_statuses": [200]},
+    {"id": "update_customer", "method": "PUT", "path": "/api/customers/{customer_id}", "auth": true, "body_ref": "customer_update", "expected_statuses": [200]},
+    {"id": "update_credit_limit", "method": "PUT", "path": "/api/customers/{customer_id}/credit-limit", "auth": true, "body_ref": "credit_limit_update", "expected_statuses": [200]},
+    {"id": "customer_payment", "method": "POST", "path": "/api/customers/{customer_id}/payment", "auth": true, "body_ref": "customer_payment", "expected_statuses": [200]},
+    {"id": "customer_freeze", "method": "POST", "path": "/api/customers/{customer_id}/credit-freeze", "auth": true, "body_ref": "customer_freeze", "expected_statuses": [200]},
+    {"id": "credit_aging_report", "method": "GET", "path": "/api/transactions/report/credit-aging", "auth": true, "expected_statuses": [200]},
+    {"id": "create_transaction", "method": "POST", "path": "/api/transactions", "auth": true, "body_ref": "transaction_create", "expected_statuses": [200]},
+    {"id": "transactions_list", "method": "GET", "path": "/api/transactions/{customer_id}", "auth": true, "query_ref": "transactions_list", "expected_statuses": [200]},
+    {"id": "waive_transaction", "method": "PATCH", "path": "/api/transactions/{transaction_id}/waive", "auth": true, "expected_statuses": [200]},
+    {"id": "delete_customer", "method": "DELETE", "path": "/api/customers/{customer_id}", "auth": true, "expected_statuses": [200]},
+
+    {"id": "create_supplier", "method": "POST", "path": "/api/suppliers", "auth": true, "body_ref": "supplier_create", "expected_statuses": [200]},
+    {"id": "suppliers_list", "method": "GET", "path": "/api/suppliers", "auth": true, "expected_statuses": [200]},
+    {"id": "supplier_payment_history", "method": "GET", "path": "/api/suppliers/payment-history/all", "auth": true, "query_ref": "supplier_payment_history", "expected_statuses": [200]},
+    {"id": "get_supplier", "method": "GET", "path": "/api/suppliers/{supplier_id}", "auth": true, "expected_statuses": [200]},
+    {"id": "update_supplier", "method": "PUT", "path": "/api/suppliers/{supplier_id}", "auth": true, "body_ref": "supplier_update", "expected_statuses": [200]},
+    {"id": "pending_supplier_payments", "method": "GET", "path": "/api/suppliers/{supplier_id}/pending-payments", "auth": true, "expected_statuses": [200]},
+    {"id": "record_supplier_payment", "method": "POST", "path": "/api/suppliers/{supplier_id}/payment", "auth": true, "body_ref": "supplier_payment", "expected_statuses": [200]},
+    {"id": "delete_supplier", "method": "DELETE", "path": "/api/suppliers/{supplier_id}", "auth": true, "expected_statuses": [200]},
+
+    {"id": "create_expense", "method": "POST", "path": "/api/expenses", "auth": true, "body_ref": "expense_create", "expected_statuses": [200]},
+    {"id": "expenses_list", "method": "GET", "path": "/api/expenses", "auth": true, "query_ref": "expenses_list", "expected_statuses": [200]},
+    {"id": "expenses_summary", "method": "GET", "path": "/api/expenses/summary", "auth": true, "query_ref": "expenses_summary", "expected_statuses": [200]},
+    {"id": "financial_report", "method": "GET", "path": "/api/expenses/financial-report", "auth": true, "query_ref": "financial_report", "expected_statuses": [200]},
+    {"id": "delete_expense", "method": "DELETE", "path": "/api/expenses/{expense_id}", "auth": true, "expected_statuses": [200]},
+
+    {"id": "dashboard_kpis", "method": "GET", "path": "/api/dashboard/kpis", "auth": true, "expected_statuses": [200]},
+    {"id": "dashboard_alerts", "method": "GET", "path": "/api/dashboard/alerts", "auth": true, "expected_statuses": [200]},
+    {"id": "shift_report", "method": "GET", "path": "/api/shifts/report", "auth": true, "query_ref": "shift_report", "expected_statuses": [200]},
+    {"id": "dashboard_quick_stats", "method": "GET", "path": "/api/dashboard/quick-stats", "auth": true, "expected_statuses": [200]},
+    {"id": "dashboard_summary", "method": "GET", "path": "/api/dashboard/summary", "auth": true, "expected_statuses": [200]},
+    {"id": "dashboard_top_products", "method": "GET", "path": "/api/dashboard/top-products", "auth": true, "query_ref": "top_products", "expected_statuses": [200]},
+    {"id": "dashboard_sales_overview", "method": "GET", "path": "/api/dashboard/sales-overview", "auth": true, "query_ref": "sales_overview", "expected_statuses": [200]},
+
+    {"id": "create_order", "method": "POST", "path": "/api/create-order", "auth": false, "body_ref": "create_order", "expected_statuses": [200, 500]},
+    {"id": "verify_payment", "method": "POST", "path": "/api/verify-payment", "auth": false, "body_ref": "verify_payment", "expected_statuses": [200, 400, 500]},
+
+    {"id": "ml_sales_forecast", "method": "GET", "path": "/api/ml/sales-forecast", "auth": false, "expected_statuses": [200, 500]},
+    {"id": "ml_inventory_insights", "method": "GET", "path": "/api/ml/inventory-insights", "auth": false, "expected_statuses": [200, 500]},
+    {"id": "ml_cashflow_insights", "method": "GET", "path": "/api/ml/cashflow-insights", "auth": false, "expected_statuses": [200, 500]},
+    {"id": "ml_credit_risk", "method": "GET", "path": "/api/ml/credit-risk", "auth": false, "expected_statuses": [200, 500]},
+    {"id": "ml_all_insights", "method": "GET", "path": "/api/ml/all-insights", "auth": false, "expected_statuses": [200, 500]}
+  ]
+}
