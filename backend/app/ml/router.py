@@ -2,6 +2,8 @@
 ML Insights Router
 Exposes 4 endpoints for AI Insights on the dashboard.
 """
+from importlib import import_module
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -56,22 +58,18 @@ def credit_risk(db: Session = Depends(get_db)):
 
 @router.get("/all-insights")
 def all_insights(db: Session = Depends(get_db)):
-    """Single endpoint that returns all 4 ML insights combined — used by the dashboard."""
-    from app.ml.sales_forecast import get_sales_forecast
-    from app.ml.inventory_optimizer import get_inventory_insights
-    from app.ml.cashflow_analyzer import get_cashflow_insights
-    from app.ml.credit_risk import get_credit_risk_insights
-
+    """Return all ML insights together while tolerating missing optional dependencies."""
     results = {}
     combined_insights = []
 
-    for key, fn in [
-        ("sales_forecast", get_sales_forecast),
-        ("inventory", get_inventory_insights),
-        ("cashflow", get_cashflow_insights),
-        ("credit_risk", get_credit_risk_insights),
+    for key, module_path, fn_name in [
+        ("sales_forecast", "app.ml.sales_forecast", "get_sales_forecast"),
+        ("inventory", "app.ml.inventory_optimizer", "get_inventory_insights"),
+        ("cashflow", "app.ml.cashflow_analyzer", "get_cashflow_insights"),
+        ("credit_risk", "app.ml.credit_risk", "get_credit_risk_insights"),
     ]:
         try:
+            fn = getattr(import_module(module_path), fn_name)
             data = fn(db)
             results[key] = data
             combined_insights.extend(data.get("insights", []))
