@@ -1,17 +1,17 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/authStore.js'
+import { useAIAssistantStore } from '../../stores/aiAssistantStore.js'
 import MainLayout from '../../layouts/MainLayout.vue'
 import Card from '../../components/ui/Card.vue'
-import Button from '../../components/ui/Button.vue'
 import SalesTrendChart from '../../components/charts/SalesTrendChart.vue'
 import RevenueExpenseChart from '../../components/charts/RevenueExpenseChart.vue'
 import AIInsightCard from '../../components/ai/AIInsightCard.vue'
-import { formatCurrency } from '../../utils/currency.js'
 import { getIcon } from '../../utils/iconMap.js'
-import { dashboardService, mlInsightsService } from '../../services/apiService.js'
+import { chatbotService, dashboardService, mlInsightsService } from '../../services/apiService.js'
 
 const authStore = useAuthStore()
+const aiAssistantStore = useAIAssistantStore()
 
 const kpiCards = ref([
   { label: "Today's Sales", value: 0, displayValue: 0, change: 0, icon: 'shopping-cart', color: 'emerald' },
@@ -24,6 +24,12 @@ const kpiCards = ref([
 
 const loading = ref(false)
 const error = ref(null)
+const sqlPrompt = ref('')
+const sqlResult = ref('')
+const sqlExplanation = ref('')
+const sqlData = ref(null)
+const sqlLoading = ref(false)
+const sqlError = ref('')
 
 // Employee view cards (only Today's Sales and Low Stock)
 const employeeKpiCards = computed(() => {
@@ -199,10 +205,36 @@ const notificationColors = {
 }
 
 const queryConvertorCard = {
-  badge: 'Coming Soon',
+  badge: 'Live',
   title: 'Query Convertor',
-  description: 'Turn plain-language store questions into smart chatbot-ready queries from one focused dashboard entry point.',
-  highlights: ['Natural language', 'Retail-friendly prompts', 'Frontend ready for chatbot hookup'],
+  description: 'Turn plain-language store questions into SQL and send the same prompt to the AI assistant when you want a conversational answer.',
+  highlights: ['Natural language', 'SQL generation', 'Chatbot connected'],
+}
+
+const runSqlQuery = async () => {
+  const prompt = sqlPrompt.value.trim()
+  if (!prompt) return
+
+  sqlLoading.value = true
+  sqlError.value = ''
+  sqlResult.value = ''
+  sqlExplanation.value = ''
+  sqlData.value = null
+
+  try {
+    const result = await chatbotService.querySql(prompt)
+    sqlResult.value = result.sql || ''
+    sqlExplanation.value = result.text || ''
+    sqlData.value = result.result
+  } catch (err) {
+    sqlError.value = err.message || 'Failed to generate SQL query'
+  } finally {
+    sqlLoading.value = false
+  }
+}
+
+const openAssistantWithPrompt = () => {
+  aiAssistantStore.openWithPrompt(sqlPrompt.value.trim())
 }
 </script>
 
@@ -253,17 +285,50 @@ const queryConvertorCard = {
                 </span>
               </div>
             </div>
-            <div class="flex flex-col items-start gap-3 lg:items-end">
-              <button
-                type="button"
-                class="group inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/15 transition hover:-translate-y-0.5 hover:bg-emerald-600"
-              >
-                <span>Open Query Convertor</span>
-                <svg class="h-4 w-4 transition group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-              </button>
-              <p class="text-xs font-medium text-slate-500">Frontend preview only. We can wire the chatbot backend into this next.</p>
+            <div class="w-full max-w-xl space-y-3 lg:min-w-[26rem]">
+              <label class="block text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                Ask a store question
+              </label>
+              <textarea
+                v-model="sqlPrompt"
+                rows="3"
+                placeholder="Example: Show total milk sales for this week by customer"
+                class="w-full rounded-2xl border border-white/70 bg-white/85 px-4 py-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-200"
+              ></textarea>
+              <div class="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  class="group inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/15 transition hover:-translate-y-0.5 hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  :disabled="sqlLoading || !sqlPrompt.trim()"
+                  @click="runSqlQuery"
+                >
+                  <span>{{ sqlLoading ? 'Generating SQL...' : 'Generate SQL' }}</span>
+                  <svg class="h-4 w-4 transition group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white/80 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-white"
+                  :disabled="!sqlPrompt.trim()"
+                  @click="openAssistantWithPrompt"
+                >
+                  Open In Chatbot
+                </button>
+              </div>
+              <p class="text-xs font-medium text-slate-500">`/query/sql` is used here for SQL generation, and the same question can be sent to the chatbot for a natural-language answer.</p>
+              <div v-if="sqlError" class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {{ sqlError }}
+              </div>
+              <div v-else-if="sqlResult || sqlExplanation" class="rounded-2xl border border-slate-200 bg-slate-950 px-4 py-4 text-sm text-slate-100 shadow-lg">
+                <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-300">Generated SQL</p>
+                <pre class="mt-3 overflow-x-auto whitespace-pre-wrap text-xs leading-6 text-slate-100">{{ sqlResult || 'The backend returned an explanation but no SQL text field.' }}</pre>
+                <p v-if="sqlExplanation" class="mt-3 border-t border-white/10 pt-3 text-xs leading-6 text-slate-300">{{ sqlExplanation }}</p>
+                <div v-if="sqlData !== null" class="mt-3 border-t border-white/10 pt-3">
+                  <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-300">Query Result</p>
+                  <pre class="mt-3 overflow-x-auto whitespace-pre-wrap text-xs leading-6 text-slate-200">{{ JSON.stringify(sqlData, null, 2) }}</pre>
+                </div>
+              </div>
             </div>
           </div>
         </div>

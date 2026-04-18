@@ -1,4 +1,5 @@
 import api from '../utils/api'
+import chatbotApi from '../utils/chatbotApi'
 
 function formatNotificationTime() {
   return 'Updated just now'
@@ -1010,6 +1011,42 @@ export const dashboardService = {
       throw new Error(error.response?.data?.detail || 'Failed to fetch sales overview')
     }
   }
+}
+
+export const chatbotService = {
+  async querySql(prompt, history = []) {
+    try {
+      const response = await chatbotApi.post('/query/sql', {
+        query: prompt,
+      })
+
+      return {
+        raw: response.data,
+        text: response.data?.message || response.data?.error || '',
+        sql: response.data?.generated_sql || '',
+        result: response.data?.result ?? null,
+      }
+    } catch (error) {
+      throw new Error(error.response?.data?.detail || 'Failed to generate SQL query')
+    }
+  },
+
+  async queryChat(prompt, history = []) {
+    try {
+      const response = await chatbotApi.post('/query/chat', {
+        query: prompt,
+        history,
+      })
+
+      return {
+        raw: response.data,
+        text: response.data?.answer || '',
+        history: response.data?.history || [],
+      }
+    } catch (error) {
+      throw new Error(error.response?.data?.detail || 'Failed to send chat message')
+    }
+  },
 }
 
 export const notificationService = {
