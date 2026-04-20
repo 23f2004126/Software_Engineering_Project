@@ -1,6 +1,33 @@
 from core.llm import call_llm_with_history
-from core.prompts import GENERIC_SYSTEM_PROMPT
+from core.prompts import EMPLOYEE_STORE_ONLY_CHAT_PROMPT, GENERIC_SYSTEM_PROMPT
 from database.db import execute_query
+
+EMPLOYEE_RESTRICTED_KEYWORDS = [
+    "user",
+    "users",
+    "employee",
+    "employees",
+    "staff",
+    "login",
+    "password",
+    "profile",
+    "account",
+    "credential",
+    "credentials",
+    "email",
+    "phone number",
+    "designation",
+    "role",
+]
+
+
+def _is_employee_scope(scope: str | None) -> bool:
+    return (scope or "").strip().lower() == "employee_store_only"
+
+
+def _is_user_related_query(query: str) -> bool:
+    q = query.lower()
+    return any(keyword in q for keyword in EMPLOYEE_RESTRICTED_KEYWORDS)
 
 # ── TABLE ROUTING ─────────────────────────────────────────────────────────────
 # Maps keyword groups → a focused DB fetch function.
@@ -217,7 +244,7 @@ def _fetch_db_context(query: str) -> str:
 
 # ── MAIN HANDLER ──────────────────────────────────────────────────────────────
 
-def handle_chat_query(user_query: str, history: list[dict] | None = None) -> dict:
+def handle_chat_query(user_query: str, history: list[dict] | None = None, scope: str = "default") -> dict:
     """
     Handle a business/retail question with conversation history.
 
@@ -227,6 +254,16 @@ def handle_chat_query(user_query: str, history: list[dict] | None = None) -> dic
     """
     if history is None:
         history = []
+
+    if _is_employee_scope(scope) and _is_user_related_query(user_query):
+        refusal = "I can help only with store-related questions here. I can't answer user-related or employee-account questions."
+        return {
+            "answer": refusal,
+            "history": history + [
+                {"role": "user", "content": user_query},
+                {"role": "assistant", "content": refusal}
+            ]
+        }
 
     # Fetch focused DB context for this specific query
     db_context = _fetch_db_context(user_query)
@@ -244,7 +281,8 @@ def handle_chat_query(user_query: str, history: list[dict] | None = None) -> dic
     # Append current turn to history and send the full conversation
     full_history = history + [{"role": "user", "content": current_message}]
 
-    answer = call_llm_with_history(GENERIC_SYSTEM_PROMPT, full_history)
+    system_prompt = EMPLOYEE_STORE_ONLY_CHAT_PROMPT if _is_employee_scope(scope) else GENERIC_SYSTEM_PROMPT
+    answer = call_llm_with_history(system_prompt, full_history)
 
     return {
         "answer": answer,

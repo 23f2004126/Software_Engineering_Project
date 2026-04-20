@@ -8,5 +8,5 @@ const authStore = useAuthStore()
 
 <template>
   <RouterView />
-  <AIChatModal v-if="authStore.isOwner" />
+  <AIChatModal v-if="authStore.isAuthenticated" />
 </template>

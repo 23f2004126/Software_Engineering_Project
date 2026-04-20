@@ -1,10 +1,12 @@
 <script setup>
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { chatbotService } from '../../services/apiService.js'
+import { useAuthStore } from '../../stores/authStore.js'
 import { useAIAssistantStore } from '../../stores/aiAssistantStore.js'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const aiAssistantStore = useAIAssistantStore()
 
 const inputText = ref('')
@@ -12,20 +14,40 @@ const isTyping = ref(false)
 const messagesEl = ref(null)
 const conversationHistory = ref([])
 
-const messages = ref([
-  {
-    role: 'ai',
-    text: 'Ask me about sales, inventory, credit, profit, or trends. I will use the `/query/chat` endpoint for each message.',
-    time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-  },
-])
+const ownerIntroMessage = 'Ask me about sales, inventory, credit, profit, or trends. I will use the `/query/chat` endpoint for each message.'
+const employeeIntroMessage = 'Ask me about billing, inventory, milk entries, shift activity, or today\'s store status. I only answer store-related questions here and will not answer user-related or employee-account questions.'
 
-const quickChips = [
-  "Today's summary",
-  'Low stock items',
-  'Profit analysis',
-  'Credit risk customers',
-]
+const messages = ref([])
+const assistantScope = computed(() => (authStore.isEmployee ? 'employee_store_only' : 'default'))
+
+const quickChips = computed(() => {
+  if (authStore.isEmployee) {
+    return [
+      "Today's summary",
+      'Low stock items',
+      'Today\'s billing status',
+      'My shift summary',
+    ]
+  }
+
+  return [
+    "Today's summary",
+    'Low stock items',
+    'Profit analysis',
+    'Credit risk customers',
+  ]
+})
+
+const buildIntroMessage = () => ({
+  role: 'ai',
+  text: authStore.isEmployee ? employeeIntroMessage : ownerIntroMessage,
+  time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+})
+
+const resetConversation = () => {
+  messages.value = [buildIntroMessage()]
+  conversationHistory.value = []
+}
 
 const scrollToBottom = async () => {
   await nextTick()
@@ -35,7 +57,8 @@ const scrollToBottom = async () => {
 }
 
 const sendMessage = async (prefilledText = '') => {
-  const prompt = (prefilledText || inputText.value).trim()
+  const promptSource = typeof prefilledText === 'string' ? prefilledText : inputText.value
+  const prompt = promptSource.trim()
   if (!prompt || isTyping.value) return
 
   messages.value.push({
@@ -50,7 +73,9 @@ const sendMessage = async (prefilledText = '') => {
   isTyping.value = true
 
   try {
-    const result = await chatbotService.queryChat(prompt, conversationHistory.value)
+    const result = await chatbotService.queryChat(prompt, conversationHistory.value, {
+      scope: assistantScope.value,
+    })
 
     conversationHistory.value = result.history || []
 
@@ -86,6 +111,10 @@ watch(
   async (isOpen) => {
     if (!isOpen) return
 
+    if (messages.value.length === 0) {
+      resetConversation()
+    }
+
     await scrollToBottom()
 
     const pendingPrompt = aiAssistantStore.consumePendingPrompt()
@@ -94,6 +123,14 @@ watch(
       sendMessage(pendingPrompt)
     }
   }
+)
+
+watch(
+  () => authStore.role,
+  () => {
+    resetConversation()
+  },
+  { immediate: true }
 )
 </script>
 

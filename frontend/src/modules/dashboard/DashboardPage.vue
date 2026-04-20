@@ -12,6 +12,7 @@ import { chatbotService, dashboardService, mlInsightsService } from '../../servi
 
 const authStore = useAuthStore()
 const aiAssistantStore = useAIAssistantStore()
+const assistantScope = computed(() => (authStore.isEmployee ? 'employee_store_only' : 'default'))
 
 const kpiCards = ref([
   { label: "Today's Sales", value: 0, displayValue: 0, change: 0, icon: 'shopping-cart', color: 'emerald' },
@@ -207,7 +208,9 @@ const notificationColors = {
 const queryConvertorCard = {
   badge: 'Live',
   title: 'Query Convertor',
-  description: 'Turn plain-language store questions into SQL and send the same prompt to the AI assistant when you want a conversational answer.',
+  description: authStore.isEmployee
+    ? 'Turn plain-language store questions into SQL. Employee access is limited to store-related questions only.'
+    : 'Turn plain-language store questions into SQL and send the same prompt to the AI assistant when you want a conversational answer.',
   highlights: ['Natural language', 'SQL generation', 'Chatbot connected'],
 }
 
@@ -222,7 +225,9 @@ const runSqlQuery = async () => {
   sqlData.value = null
 
   try {
-    const result = await chatbotService.querySql(prompt)
+    const result = await chatbotService.querySql(prompt, {
+      scope: assistantScope.value,
+    })
     sqlResult.value = result.sql || ''
     sqlExplanation.value = result.text || ''
     sqlData.value = result.result

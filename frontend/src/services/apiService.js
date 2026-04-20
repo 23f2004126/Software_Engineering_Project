@@ -1014,10 +1014,11 @@ export const dashboardService = {
 }
 
 export const chatbotService = {
-  async querySql(prompt, history = []) {
+  async querySql(prompt, options = {}) {
     try {
       const response = await chatbotApi.post('/query/sql', {
         query: prompt,
+        scope: options.scope || 'default',
       })
 
       return {
@@ -1031,11 +1032,12 @@ export const chatbotService = {
     }
   },
 
-  async queryChat(prompt, history = []) {
+  async queryChat(prompt, history = [], options = {}) {
     try {
       const response = await chatbotApi.post('/query/chat', {
         query: prompt,
         history,
+        scope: options.scope || 'default',
       })
 
       return {
