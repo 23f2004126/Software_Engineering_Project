@@ -32,14 +32,23 @@ from app.seed import init_db, seed_data
 from app.security import hash_password, verify_password
 
 
+load_dotenv()
+
 app = FastAPI(title="Sonik Backend V2", version="2.0.0")
 
 from app.ml.router import router as ml_router
 app.include_router(ml_router)
 
+frontend_urls = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+if os.getenv("FRONTEND_URL"):
+    frontend_urls.append(os.getenv("FRONTEND_URL").rstrip("/"))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=frontend_urls,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
